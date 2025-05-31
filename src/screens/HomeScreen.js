@@ -16,6 +16,7 @@ import {
 } from 'react-native-paper';
 import { expoDbManager } from '../database/expo-manager';
 import { exportService } from '../services/ExportService';
+import ThemeToggle from '../components/common/ThemeToggle';
 
 const HomeScreen = () => {
   const [reasons, setReasons] = useState([]);
@@ -119,6 +120,7 @@ const HomeScreen = () => {
       <Appbar.Header>
         <Appbar.Action icon="menu" onPress={handleMenuPress} />
         <Appbar.Content title="Inventário" />
+        <ThemeToggle />
       </Appbar.Header>
 
       <ScrollView

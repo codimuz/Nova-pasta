@@ -12,12 +12,11 @@ const Card = ({ children, style, ...props }) => {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: theme.components.card.backgroundColor,
-    borderRadius: theme.components.card.borderRadius,
-    padding: theme.components.card.padding,
-    margin: theme.components.card.margin,
-    elevation: theme.components.card.elevation,
-    shadowColor: theme.colors.shadow,
+    // Removido backgroundColor customizado - usando padrão do sistema
+    borderRadius: theme.borderRadius.sm,
+    padding: theme.spacing.md,
+    margin: theme.spacing.sm,
+    elevation: theme.elevation.level2,
     shadowOffset: {
       width: 0,
       height: 2,

@@ -24,7 +24,7 @@ const TopAppBar = ({ title, onMenuPress }) => {
 const styles = StyleSheet.create({
   container: {
     height: 56,
-    backgroundColor: theme.colors.primary,
+    // Removido backgroundColor customizado - usando padrão do sistema
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: theme.spacing.md,
@@ -46,14 +46,14 @@ const styles = StyleSheet.create({
   },
   menuIcon: {
     fontSize: 20,
-    color: theme.colors.onPrimary,
+    // Removido color customizado - usando padrão do sistema
     fontWeight: '600',
   },
   title: {
     flex: 1,
     fontSize: theme.typography.sizes.headlineSmall,
     fontWeight: theme.typography.weights.medium,
-    color: theme.colors.onPrimary,
+    // Removido color customizado - usando padrão do sistema
     fontFamily: theme.typography.fontFamily,
     marginLeft: theme.spacing.md,
   },

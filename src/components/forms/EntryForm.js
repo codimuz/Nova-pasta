@@ -243,7 +243,7 @@ const EntryForm = ({ onSubmit, onCancel, initialData = {}, loading = false }) =>
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#FFFFFF',
+    // Removido backgroundColor customizado - usando padrão do tema
     borderRadius: spacing.borderRadius.lg,
     margin: spacing.md,
   },

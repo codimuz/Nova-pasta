@@ -20,7 +20,7 @@ const TextInput = ({
       placeholder={placeholder}
       variant={variant}
       style={[styles.textInput, style]}
-      color={theme.colors.primary}
+      // Removido color customizado - usando padrão do sistema
       {...props}
     />
   );
@@ -28,11 +28,11 @@ const TextInput = ({
 
 const styles = StyleSheet.create({
   textInput: {
-    height: theme.components.textInput.height,
-    backgroundColor: theme.components.textInput.backgroundColor,
-    borderRadius: theme.components.textInput.borderRadius,
-    fontSize: theme.components.textInput.fontSize,
-    color: theme.components.textInput.color,
+    height: theme.dimensions.textInput.height,
+    // Removido backgroundColor customizado - usando padrão do sistema
+    borderRadius: theme.dimensions.textInput.borderRadius,
+    fontSize: theme.dimensions.textInput.fontSize,
+    // Removido color customizado - usando padrão do sistema
     marginVertical: theme.spacing.sm,
   },
 });
