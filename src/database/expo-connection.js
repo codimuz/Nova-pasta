@@ -1,6 +1,6 @@
 /**
  * SQLite Database Connection usando expo-sqlite
- * Substituição do react-native-sqlite-storage para correção do erro
+ * Atualizado para usar a nova API do Expo SQLite
  */
 
 import * as SQLite from 'expo-sqlite';
@@ -8,13 +8,14 @@ import * as SQLite from 'expo-sqlite';
 const DATABASE_NAME = 'invent.db';
 
 /**
- * Abrir conexão com o banco SQLite usando expo-sqlite
+ * Abrir conexão com o banco SQLite usando a nova API
  */
-export const openDatabase = async () => {
+export const openDatabaseConnection = () => {
   try {
     console.log('EXPO-SQLITE: Tentando abrir banco de dados...');
     
-    const db = await SQLite.openDatabaseAsync(DATABASE_NAME);
+    // Usar a nova API do expo-sqlite
+    const db = SQLite.openDatabaseSync(DATABASE_NAME);
     
     if (!db) {
       throw new Error('Database object é null');
@@ -41,8 +42,8 @@ export const enableDebug = () => {
  */
 export const closeDatabase = async (db) => {
   try {
-    if (db && typeof db.closeAsync === 'function') {
-      await db.closeAsync();
+    if (db && typeof db.closeSync === 'function') {
+      db.closeSync();
       console.log('EXPO-SQLITE: Conexão fechada com sucesso');
     }
   } catch (error) {
@@ -54,11 +55,11 @@ export const closeDatabase = async (db) => {
  * Verificar se o banco está disponível
  */
 export const isDatabaseReady = (db) => {
-  return db !== null && db !== undefined && typeof db.execAsync === 'function';
+  return db !== null && db !== undefined && typeof db.execSync === 'function';
 };
 
 /**
- * Executar SQL com verificações de segurança
+ * Executar SQL com verificações de segurança usando nova API
  */
 export const executeSqlSafe = async (db, sql, params = []) => {
   try {
@@ -68,13 +69,24 @@ export const executeSqlSafe = async (db, sql, params = []) => {
     
     console.log('EXPO-SQLITE: Executando SQL:', sql.substring(0, 100) + '...');
     
-    // expo-sqlite usa execAsync para statements sem retorno
+    // Para SELECT queries
     if (sql.trim().toUpperCase().startsWith('SELECT')) {
-      const result = await db.getAllAsync(sql, params);
-      return [{ rows: { length: result.length, item: (i) => result[i], _array: result } }];
+      const result = db.getAllSync(sql, params);
+      return [{
+        rows: {
+          length: result.length,
+          item: (i) => result[i],
+          _array: result
+        }
+      }];
     } else {
-      const result = await db.runAsync(sql, params);
-      return [{ insertId: result.lastInsertRowId, rowsAffected: result.changes }];
+      // Para INSERT, UPDATE, DELETE
+      const result = db.runSync(sql, params);
+      return [{
+        insertId: result.lastInsertRowId,
+        rowsAffected: result.changes,
+        rows: { length: 0, item: () => null, _array: [] }
+      }];
     }
     
   } catch (error) {
@@ -92,13 +104,13 @@ class ExpoSQLiteConnection {
     this.isConnected = false;
   }
 
-  async connect() {
+  connect() {
     try {
       if (this.isConnected && this.db) {
         return this.db;
       }
 
-      this.db = await openDatabase();
+      this.db = openDatabaseConnection();
       
       if (!isDatabaseReady(this.db)) {
         throw new Error('Database connection failed - object not ready');
