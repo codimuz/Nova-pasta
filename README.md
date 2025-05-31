@@ -1,5 +1,13 @@
 # Invent - Sistema de Controle de Perdas
 
+![GitHub](https://img.shields.io/github/license/codimuz/Nova-pasta)
+![GitHub stars](https://img.shields.io/github/stars/codimuz/Nova-pasta)
+![GitHub forks](https://img.shields.io/github/forks/codimuz/Nova-pasta)
+![GitHub issues](https://img.shields.io/github/issues/codimuz/Nova-pasta)
+![React Native](https://img.shields.io/badge/React%20Native-0.74.x-61DAFB?logo=react)
+![Expo](https://img.shields.io/badge/Expo-51.x-000020?logo=expo)
+![SQLite](https://img.shields.io/badge/SQLite-3.x-003B57?logo=sqlite)
+
 Sistema de inventário para controle de perdas e ajustes, desenvolvido em React Native com Expo Bare Workflow.
 
 ## 🚀 Tecnologias
@@ -72,8 +80,8 @@ Lançamentos de perdas/ajustes.
 
 1. **Clone o repositório:**
 ```bash
-git clone [seu-repositorio]
-cd invent
+git clone https://github.com/codimuz/Nova-pasta.git
+cd Nova-pasta
 ```
 
 2. **Instale as dependências:**
@@ -247,11 +255,11 @@ node --version
 
 ## 📄 Licença
 
-Este projeto está sob a licença MIT. Veja o arquivo `LICENSE` para mais detalhes.
+Este projeto está sob a licença MIT. Veja o arquivo [`LICENSE`](LICENSE) para mais detalhes.
 
 ## 📞 Suporte
 
-Para suporte e dúvidas, entre em contato através dos issues do GitHub ou envie um email para [seu-email].
+Para suporte e dúvidas, entre em contato através dos [issues do GitHub](https://github.com/codimuz/Nova-pasta/issues).
 
 ---
 
