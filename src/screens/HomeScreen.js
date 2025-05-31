@@ -8,11 +8,11 @@ import {
 import {
   Appbar,
   Button,
-  Card,
   TextInput,
   Text,
   Menu,
   Divider,
+  FAB,
 } from 'react-native-paper';
 import { expoDbManager } from '../database/expo-manager';
 import { exportService } from '../services/ExportService';
@@ -25,6 +25,7 @@ const HomeScreen = () => {
   const [code, setCode] = useState('');
   const [quantity, setQuantity] = useState('');
   const [showReasonMenu, setShowReasonMenu] = useState(false);
+  const [fabOpen, setFabOpen] = useState(false);
 
   useEffect(() => {
     const loadInitialData = async () => {
@@ -128,95 +129,73 @@ const HomeScreen = () => {
         contentContainerStyle={styles.contentContainer}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={styles.buttonRow}>
-          <Button
-            icon="upload"
-            mode="contained"
-            onPress={handleImport}
-            style={styles.actionButton}
-          >
-            Importar
-          </Button>
-          <Button
-            icon="download"
-            mode="contained"
-            onPress={handleExport}
-            style={styles.actionButton}
-          >
-            Exportar
-          </Button>
-        </View>
 
-        <Card style={styles.formCard}>
-          <Card.Content>
-            <Menu
-              visible={showReasonMenu}
-              onDismiss={() => setShowReasonMenu(false)}
-              anchor={
-                <TextInput
-                  label="Motivo"
-                  value={selectedReason ? selectedReason.description : ''}
-                  mode="outlined"
-                  editable={false}
-                  onPressIn={() => setShowReasonMenu(true)}
-                  right={<TextInput.Icon icon="menu-down" onPress={() => setShowReasonMenu(true)} />}
-                  style={styles.inputField}
-                />
-              }
-            >
-              {reasons.map((reason) => (
-                <Menu.Item
-                  key={reason.id.toString()}
-                  onPress={() => selectReason(reason)}
-                  title={reason.description}
-                />
-              ))}
-              {reasons.length > 0 && <Divider />}
-              <Menu.Item
-                onPress={() => setShowReasonMenu(false)}
-                title="Cancelar"
-              />
-            </Menu>
-
+        <Menu
+          visible={showReasonMenu}
+          onDismiss={() => setShowReasonMenu(false)}
+          anchor={
             <TextInput
-              label="Código do Produto"
-              value={code}
-              onChangeText={handleCodeChange}
+              label="Motivo"
+              value={selectedReason ? selectedReason.description : ''}
               mode="outlined"
+              editable={false}
+              onPressIn={() => setShowReasonMenu(true)}
+              right={<TextInput.Icon icon="menu-down" onPress={() => setShowReasonMenu(true)} />}
               style={styles.inputField}
             />
-
-            {selectedProduct && (
-              <View style={styles.productInfoContainer}>
-                <Text variant="bodyMedium">
-                  Nome: {selectedProduct.product_name}
-                </Text>
-                <Text variant="bodySmall">
-                  Embalagem: {selectedProduct.unit_type}
-                </Text>
-                <Text variant="bodySmall">
-                  Preço: R$ {selectedProduct.regular_price?.toFixed(2).replace('.', ',')}
-                </Text>
-              </View>
-            )}
-            {!selectedProduct && code.trim().length > 0 && (
-              <View style={styles.productInfoContainer}>
-                <Text variant="bodyMedium" style={{fontStyle: 'italic'}}>
-                  Produto não selecionado ou não cadastrado.
-                </Text>
-              </View>
-            )}
-
-            <TextInput
-              label="Quantidade"
-              value={quantity}
-              onChangeText={setQuantity}
-              mode="outlined"
-              keyboardType="numeric"
-              style={styles.inputField}
+          }
+        >
+          {reasons.map((reason) => (
+            <Menu.Item
+              key={reason.id.toString()}
+              onPress={() => selectReason(reason)}
+              title={reason.description}
             />
-          </Card.Content>
-        </Card>
+          ))}
+          {reasons.length > 0 && <Divider />}
+          <Menu.Item
+            onPress={() => setShowReasonMenu(false)}
+            title="Cancelar"
+          />
+        </Menu>
+
+        <TextInput
+          label="Código do Produto"
+          value={code}
+          onChangeText={handleCodeChange}
+          mode="outlined"
+          style={styles.inputField}
+        />
+
+        {selectedProduct && (
+          <View style={styles.productInfoContainer}>
+            <Text variant="bodyMedium">
+              Nome: {selectedProduct.product_name}
+            </Text>
+            <Text variant="bodySmall">
+              Embalagem: {selectedProduct.unit_type}
+            </Text>
+            <Text variant="bodySmall">
+              Preço: R$ {selectedProduct.regular_price?.toFixed(2).replace('.', ',')}
+            </Text>
+          </View>
+        )}
+        {!selectedProduct && code.trim().length > 0 && (
+          <View style={styles.productInfoContainer}>
+            <Text variant="bodyMedium" style={{fontStyle: 'italic'}}>
+              Produto não selecionado ou não cadastrado.
+            </Text>
+          </View>
+        )}
+
+        <TextInput
+          label="Quantidade"
+          value={quantity}
+          onChangeText={setQuantity}
+          mode="outlined"
+          keyboardType="numeric"
+          style={styles.inputField}
+        />
 
         <View style={styles.saveButtonContainer}>
           <Button
@@ -230,6 +209,25 @@ const HomeScreen = () => {
           </Button>
         </View>
       </ScrollView>
+      
+      <FAB.Group
+        open={fabOpen}
+        visible
+        icon={fabOpen ? 'close' : 'plus'}
+        actions={[
+          {
+            icon: 'upload',
+            label: 'Importar',
+            onPress: handleImport,
+          },
+          {
+            icon: 'download',
+            label: 'Exportar',
+            onPress: handleExport,
+          },
+        ]}
+        onStateChange={({ open }) => setFabOpen(open)}
+      />
     </View>
   );
 };
@@ -243,18 +241,6 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     padding: 16,
-  },
-  buttonRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: 16,
-  },
-  actionButton: {
-    flex: 1,
-    marginHorizontal: 8,
-  },
-  formCard: {
-    marginBottom: 16,
   },
   inputField: {
     marginBottom: 12,
