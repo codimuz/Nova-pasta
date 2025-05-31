@@ -3,6 +3,7 @@ import { View, StyleSheet, StatusBar, Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { PaperProvider } from 'react-native-paper';
 import { ThemeProvider, useAppTheme } from './src/contexts/ThemeContext';
+import { ProductsProvider } from './src/contexts/ProductsContext';
 import { expoDbManager } from './src/database/expo-manager';
 import HomeScreen from './src/screens/HomeScreen';
 
@@ -41,15 +42,23 @@ const AppContent = () => {
   return (
     <PaperProvider theme={theme}>
       <SafeAreaProvider>
-        <StatusBar
-          barStyle={isDarkMode ? 'light-content' : 'dark-content'}
-          backgroundColor={theme.colors.surface}
-          translucent={false}
-          animated={true}
-        />
-        <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-          <HomeScreen />
-        </View>
+        <ProductsProvider
+          options={{
+            enableCache: true,
+            cacheTimeout: 5 * 60 * 1000, // 5 minutos
+            initialLoad: true,
+          }}
+        >
+          <StatusBar
+            barStyle={isDarkMode ? 'light-content' : 'dark-content'}
+            backgroundColor={theme.colors.surface}
+            translucent={false}
+            animated={true}
+          />
+          <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+            <HomeScreen />
+          </View>
+        </ProductsProvider>
       </SafeAreaProvider>
     </PaperProvider>
   );

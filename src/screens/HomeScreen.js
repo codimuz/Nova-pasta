@@ -1,101 +1,265 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   StyleSheet,
   ScrollView,
   Alert,
+  Platform,
 } from 'react-native';
+import { useProductSearch } from '../components/ProductAutocompleteInput';
 import {
   Appbar,
   Button,
   TextInput,
-  Text,
   Menu,
   Divider,
   FAB,
+  Chip,
+  List,
+  Surface,
+  ActivityIndicator,
+  Banner,
+  ProgressBar,
 } from 'react-native-paper';
+
+// Services e Managers
 import { expoDbManager } from '../database/expo-manager';
 import { exportService } from '../services/ExportService';
+
+// Contexts
+import { useProductsData, useProductsOperations } from '../contexts/ProductsContext';
+
+// Components
 import ThemeToggle from '../components/common/ThemeToggle';
+import ProductSearchInput from '../components/ProductAutocompleteInput/ProductSearchInput';
 
+
+/**
+ * HomeScreen Component Refatorado
+ *
+ * Tela principal do aplicativo de inventário que permite:
+ * - Buscar e selecionar produtos dinamicamente do banco
+ * - Escolher motivos de entrada
+ * - Registrar quantidades
+ * - Salvar entradas no banco de dados
+ * - Exportar/Importar dados
+ * - Gerenciamento otimizado de estado e cache
+ */
 const HomeScreen = () => {
+  // Estados do formulário
   const [reasons, setReasons] = useState([]);
-  const [selectedReason, setSelectedReason] = useState(null);
-  const [selectedProduct, setSelectedProduct] = useState(null);
-  const [code, setCode] = useState('');
-  const [quantity, setQuantity] = useState('');
-  const [showReasonMenu, setShowReasonMenu] = useState(false);
-  const [fabOpen, setFabOpen] = useState(false);
-
-  useEffect(() => {
-    const loadInitialData = async () => {
-      try {
-        await expoDbManager.initialize();
-        const reasonsData = await expoDbManager.fetchData('reasons');
-        setReasons(reasonsData);
-      } catch (error) {
-        Alert.alert('Erro', 'Falha ao carregar dados do banco');
-      }
-    };
-    loadInitialData();
+  
+  // Callback para seleção de produto
+  const handleProductSelect = useCallback((product) => {
+    setSelectedProduct(product);
+    console.log('HomeScreen: Produto selecionado:', product);
   }, []);
 
-  const handleProductSelect = (product) => {
-    setSelectedProduct(product);
-    setCode(product ? product.product_code : '');
-  };
+  const {
+    clearSearch,
+    clearCache,
+    forceRefresh,
+    code,
+    handleCodeChange,
+    handleFocus,
+    handleBlur,
+    showSuggestions,
+    hasResults,
+    isSearching,
+    searchError,
+    noProductsFound,
+    filteredProducts,
+  } = useProductSearch(handleProductSelect);
+  const [selectedReason, setSelectedReason] = useState(null);
+  const [quantity, setQuantity] = useState('');
+  
+  // Estados da UI
+  const [showReasonMenu, setShowReasonMenu] = useState(false);
+  const [fabOpen, setFabOpen] = useState(false);
+  const [initializing, setInitializing] = useState(true);
+  const [initError, setInitError] = useState(null);
 
-  const handleCodeChange = (text) => {
-    setCode(text);
-    if (!text.trim()) {
-      setSelectedProduct(null);
+  // Estados do produto selecionado
+  const [selectedProduct, setSelectedProduct] = useState(null);
+
+  // Contexto de produtos
+  const { products, loading: productsLoading, error: productsError, initialized: productsInitialized } = useProductsData();
+  const { refresh: refreshProducts } = useProductsOperations();
+
+  /**
+   * Carrega os motivos de entrada do banco de dados
+   * @returns {Promise<void>}
+   */
+  const loadReasons = useCallback(async () => {
+    try {
+      const reasonsData = await expoDbManager.fetchData('reasons');
+      setReasons(reasonsData);
+      console.log('HomeScreen: Motivos carregados com sucesso -', reasonsData.length, 'itens');
+    } catch (error) {
+      console.error('HomeScreen: Erro ao carregar motivos:', error);
+      throw new Error('Falha ao carregar motivos');
     }
-  };
+  }, []);
 
-  const selectReason = (reason) => {
+  /**
+   * Inicializa dados essenciais da aplicação
+   * Carrega motivos e garante que produtos estejam inicializados
+   */
+  const initializeApplicationData = useCallback(async () => {
+    try {
+      setInitializing(true);
+      setInitError(null);
+
+      console.log('HomeScreen: Iniciando inicialização...');
+      
+      // Inicializar banco de dados
+      await expoDbManager.initialize();
+      
+      // Carregar motivos
+      await loadReasons();
+      
+      // Verificar se produtos foram inicializados
+      if (!productsInitialized) {
+        console.log('HomeScreen: Aguardando inicialização dos produtos...');
+        // O contexto de produtos já gerencia a inicialização
+      }
+      
+      console.log('HomeScreen: Inicialização concluída com sucesso');
+      
+    } catch (error) {
+      console.error('HomeScreen: Erro ao inicializar dados da aplicação:', error);
+      setInitError(error.message);
+      Alert.alert(
+        'Erro de Inicialização',
+        'Falha ao carregar dados essenciais da aplicação. Tente reiniciar o app.',
+        [
+          { text: 'Tentar Novamente', onPress: initializeApplicationData },
+          { text: 'OK' }
+        ]
+      );
+    } finally {
+      setInitializing(false);
+    }
+  }, [loadReasons, productsInitialized]);
+
+  /**
+   * Efeito para inicialização dos dados na montagem do componente
+   */
+  useEffect(() => {
+    initializeApplicationData();
+  }, [initializeApplicationData]);
+
+  /**
+   * Seleciona um motivo e fecha o menu
+   * @param {Object} reason - Motivo selecionado
+   */
+  const selectReason = useCallback((reason) => {
     setSelectedReason(reason);
     setShowReasonMenu(false);
-  };
+  }, []);
 
-  const handleSave = async () => {
+  /**
+   * Valida os dados do formulário antes de salvar
+   * @returns {Object} - { isValid: boolean, errorMessage: string }
+   */
+  const validateFormData = useMemo(() => {
     if (!selectedReason) {
-      Alert.alert('Erro', 'Por favor, selecione um motivo');
-      return;
+      return { isValid: false, errorMessage: 'Por favor, selecione um motivo' };
     }
-    if (!code.trim()) {
-      Alert.alert('Erro', 'Por favor, informe o código do produto');
-      return;
+    
+    if (!selectedProduct) {
+      return { isValid: false, errorMessage: 'Por favor, selecione um produto' };
     }
-    if (!quantity.trim() || isNaN(quantity) || parseFloat(quantity) <= 0) {
-      Alert.alert('Erro', 'Por favor, informe uma quantidade válida');
-      return;
+    
+    const quantityValue = quantity.trim();
+    if (!quantityValue || isNaN(quantityValue) || parseFloat(quantityValue) <= 0) {
+      return { isValid: false, errorMessage: 'Por favor, informe uma quantidade válida' };
     }
-    try {
-      const entryData = {
-        product_code: code.trim(),
-        product_name: selectedProduct ? selectedProduct.product_name : 'PRODUTO NÃO CADASTRADO',
-        quantity: parseFloat(quantity),
-        reason_id: selectedReason.id,
-        unit_cost: selectedProduct ? selectedProduct.regular_price : 0,
-      };
-      const entryId = await expoDbManager.insertEntry(entryData);
-      Alert.alert('Sucesso', `Entrada registrada com ID: ${entryId}`, [
-        {
-          text: 'OK',
-          onPress: () => {
-            setSelectedProduct(null);
-            setCode('');
-            setQuantity('');
-          },
-        },
-      ]);
-    } catch (error) {
-      Alert.alert('Erro', `Falha ao registrar entrada: ${error.message}`);
-    }
-  };
+    
+    return { isValid: true, errorMessage: '' };
+  }, [selectedReason, selectedProduct, quantity]);
 
-  const handleImport = () => Alert.alert('Importar', 'Funcionalidade de importação');
-  const handleExport = async () => {
+  /**
+   * Cria objeto de dados para entrada no banco
+   * @returns {Object} - Dados formatados para inserção
+   */
+  const createEntryData = useCallback(() => ({
+    product_code: selectedProduct.product_code,
+    product_name: selectedProduct.product_name,
+    quantity: parseFloat(quantity.trim()),
+    reason_id: selectedReason.id,
+    unit_cost: selectedProduct.regular_price || 0,
+  }), [selectedProduct, quantity, selectedReason]);
+
+  /**
+   * Limpa o formulário após salvamento bem-sucedido
+   */
+  const resetForm = useCallback(() => {
+    clearSearch();
+    setQuantity('');
+    setSelectedReason(null);
+  }, [clearSearch]);
+
+  /**
+   * Manipula o salvamento de uma nova entrada no inventário
+   * Inclui validação, inserção no banco e feedback ao usuário
+   */
+  const handleSave = useCallback(async () => {
+    try {
+      // Validar dados do formulário
+      const validation = validateFormData;
+      if (!validation.isValid) {
+        Alert.alert('Erro de Validação', validation.errorMessage);
+        return;
+      }
+
+      // Criar dados da entrada
+      const entryData = createEntryData();
+      
+      // Inserir no banco de dados
+      const entryId = await expoDbManager.insertEntry(entryData);
+      
+      // Feedback de sucesso e limpeza do formulário
+      Alert.alert(
+        'Sucesso',
+        `Entrada registrada com ID: ${entryId}`,
+        [
+          {
+            text: 'OK',
+            onPress: resetForm,
+          },
+        ]
+      );
+      
+      console.log('HomeScreen: Entrada salva com sucesso:', { entryId, ...entryData });
+      
+    } catch (error) {
+      console.error('HomeScreen: Erro ao salvar entrada:', error);
+      Alert.alert(
+        'Erro de Salvamento',
+        `Falha ao registrar entrada: ${error.message}`,
+        [{ text: 'OK' }]
+      );
+    }
+  }, [validateFormData, createEntryData, resetForm]);
+
+  /**
+   * Manipula a importação de dados
+   * TODO: Implementar funcionalidade de importação
+   */
+  const handleImport = useCallback(() => {
+    Alert.alert(
+      'Importar Dados',
+      'Funcionalidade de importação será implementada em breve.',
+      [{ text: 'OK' }]
+    );
+  }, []);
+
+  /**
+   * Manipula a exportação de dados não sincronizados
+   * Exibe confirmação antes de executar a exportação
+   */
+  const handleExport = useCallback(async () => {
     Alert.alert(
       'Exportar Dados',
       'Deseja exportar todos os dados não sincronizados?',
@@ -105,31 +269,163 @@ const HomeScreen = () => {
           text: 'Exportar',
           onPress: async () => {
             try {
+              console.log('HomeScreen: Iniciando exportação de dados...');
               await exportService.exportData();
+              console.log('HomeScreen: Exportação concluída com sucesso');
             } catch (error) {
-              // ExportService já exibe alerta
+              console.error('HomeScreen: Erro durante exportação:', error);
+              // ExportService já exibe alerta de erro
             }
           },
         },
       ]
     );
+  }, []);
+
+  /**
+   * Manipula o pressionamento do menu lateral
+   * TODO: Implementar navegação para menu lateral
+   */
+  const handleMenuPress = useCallback(() => {
+    Alert.alert(
+      'Menu',
+      'Menu lateral será implementado em breve.',
+      [{ text: 'OK' }]
+    );
+  }, []);
+
+  /**
+   * Manipula a atualização dos dados
+   */
+  const handleRefresh = useCallback(async () => {
+    try {
+      await Promise.all([
+        refreshProducts(),
+        loadReasons(),
+        forceRefresh() // Forçar refresh da busca
+      ]);
+      clearCache(); // Limpar cache da busca
+      Alert.alert('Sucesso', 'Dados atualizados com sucesso!');
+    } catch (error) {
+      console.error('HomeScreen: Erro ao atualizar dados:', error);
+      Alert.alert('Erro', 'Falha ao atualizar dados. Tente novamente.');
+    }
+  }, [refreshProducts, loadReasons, forceRefresh, clearCache]);
+
+  /**
+   * Renderiza busca de produtos ou chip do produto selecionado
+   */
+  const renderProductSearch = () => {
+    if (selectedProduct) {
+      return (
+        <View style={styles.chipContainer}>
+          <Chip
+            icon="package-variant"
+            onClose={() => {
+              clearSearch();
+            }}
+            closeIcon="close-circle"
+            mode="outlined"
+            style={styles.productChip}
+            accessibilityLabel={`Produto selecionado: ${selectedProduct.product_name}`}
+          >
+            {selectedProduct.product_name} • {selectedProduct.unit_type} • R$ {selectedProduct.regular_price?.toFixed(2)}
+          </Chip>
+        </View>
+      );
+    }
+
+    return (
+      <ProductSearchInput
+        onProductSelect={handleProductSelect}
+        placeholder="Digite código ou nome do produto"
+        label="Buscar Produto"
+        style={styles.searchContainer}
+        autoFocus={false}
+        disabled={false}
+      />
+    );
   };
-  const handleMenuPress = () => Alert.alert('Menu', 'Menu lateral');
+
+  /**
+   * Renderiza banner de status se necessário
+   */
+  const renderStatusBanner = () => {
+    if (initError) {
+      return (
+        <Banner
+          visible={true}
+          actions={[
+            {
+              label: 'Tentar Novamente',
+              onPress: initializeApplicationData,
+            },
+            {
+              label: 'Atualizar',
+              onPress: handleRefresh,
+            },
+          ]}
+          icon="alert"
+        >
+          Erro na inicialização: {initError}
+        </Banner>
+      );
+    }
+
+    if (productsError) {
+      return (
+        <Banner
+          visible={true}
+          actions={[
+            {
+              label: 'Atualizar',
+              onPress: handleRefresh,
+            },
+          ]}
+          icon="alert"
+        >
+          Erro ao carregar produtos: {productsError}
+        </Banner>
+      );
+    }
+
+    return null;
+  };
+
+  // Mostrar loading durante inicialização
+  if (initializing || !productsInitialized) {
+    return (
+      <View style={styles.container}>
+        <Appbar.Header>
+          <Appbar.Action icon="menu" onPress={handleMenuPress} />
+          <Appbar.Content title="Inventário" />
+          <ThemeToggle />
+        </Appbar.Header>
+        
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" />
+          <ProgressBar indeterminate style={styles.progressBar} />
+        </View>
+      </View>
+    );
+  }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { overflow: 'visible' }]}>
       <Appbar.Header>
         <Appbar.Action icon="menu" onPress={handleMenuPress} />
         <Appbar.Content title="Inventário" />
+        <Appbar.Action icon="refresh" onPress={handleRefresh} />
         <ThemeToggle />
       </Appbar.Header>
 
+      {renderStatusBanner()}
+
       <ScrollView
-        style={styles.content}
-        contentContainerStyle={styles.contentContainer}
+        style={[styles.content, { overflow: 'visible' }]}
+        contentContainerStyle={[styles.contentContainer, { overflow: 'visible' }]}
         keyboardShouldPersistTaps="handled"
       >
-
         <Menu
           visible={showReasonMenu}
           onDismiss={() => setShowReasonMenu(false)}
@@ -159,34 +455,7 @@ const HomeScreen = () => {
           />
         </Menu>
 
-        <TextInput
-          label="Código do Produto"
-          value={code}
-          onChangeText={handleCodeChange}
-          mode="outlined"
-          style={styles.inputField}
-        />
-
-        {selectedProduct && (
-          <View style={styles.productInfoContainer}>
-            <Text variant="bodyMedium">
-              Nome: {selectedProduct.product_name}
-            </Text>
-            <Text variant="bodySmall">
-              Embalagem: {selectedProduct.unit_type}
-            </Text>
-            <Text variant="bodySmall">
-              Preço: R$ {selectedProduct.regular_price?.toFixed(2).replace('.', ',')}
-            </Text>
-          </View>
-        )}
-        {!selectedProduct && code.trim().length > 0 && (
-          <View style={styles.productInfoContainer}>
-            <Text variant="bodyMedium" style={{fontStyle: 'italic'}}>
-              Produto não selecionado ou não cadastrado.
-            </Text>
-          </View>
-        )}
+        {renderProductSearch()}
 
         <TextInput
           label="Quantidade"
@@ -201,7 +470,7 @@ const HomeScreen = () => {
           <Button
             mode="contained"
             onPress={handleSave}
-            disabled={!selectedReason || !code.trim() || !quantity.trim()}
+            disabled={!selectedReason || !selectedProduct || !quantity.trim()}
             icon="content-save"
             style={styles.saveButton}
           >
@@ -232,25 +501,60 @@ const HomeScreen = () => {
   );
 };
 
+/**
+ * Estilos organizados por seções para melhor manutenibilidade
+ */
 const styles = StyleSheet.create({
+  // === LAYOUT PRINCIPAL ===
   container: {
     flex: 1,
   },
   content: {
     flex: 1,
+    overflow: 'visible',
   },
   contentContainer: {
     padding: 16,
+    overflow: 'visible',
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  progressBar: {
+    marginTop: 16,
+    width: '80%',
+  },
+
+  // === CAMPOS DE FORMULÁRIO ===
   inputField: {
     marginBottom: 12,
   },
-  productInfoContainer: {
-    marginVertical: 12,
-    padding: 8,
-    backgroundColor: 'rgba(0,0,0,0.05)',
-    borderRadius: 4,
+  chipContainer: {
+    marginBottom: 12,
   },
+  productChip: {
+    alignSelf: 'flex-start',
+  },
+  
+  // === BUSCA E DROPDOWN ===
+  searchContainer: {
+    position: 'relative',
+    marginBottom: 12,
+    zIndex: 999999,
+    ...Platform.select({
+      ios: {
+        zIndex: 999999,
+      },
+      android: {
+        elevation: 999999,
+      },
+    }),
+  },
+  
+  // === BOTÕES E AÇÕES ===
   saveButtonContainer: {
     alignItems: 'center',
     marginTop: 8,

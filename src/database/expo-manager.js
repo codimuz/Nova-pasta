@@ -238,18 +238,24 @@ class ExpoSQLiteManager {
       }
       
       // Filtrar produtos por busca insensível a acentos
-      if (searchTerm && table === 'products') {
-        const normalizedSearch = this.normalizeString(searchTerm);
+      if (table === 'products' && searchTerm && searchTerm.trim().length > 0) {
+        const normalizedSearch = this.normalizeString(searchTerm.trim());
         const filteredData = data.filter(product => {
           const normalizedCode = this.normalizeString(product.product_code || '');
           const normalizedName = this.normalizeString(product.product_name || '');
           
-          return normalizedCode.includes(normalizedSearch) || 
+          return normalizedCode.includes(normalizedSearch) ||
                  normalizedName.includes(normalizedSearch);
         });
         
-        console.log(`EXPO-SQLITE: ${filteredData.length} produtos encontrados após filtro de acentos`);
+        console.log(`EXPO-SQLITE: Busca por "${searchTerm}" retornou ${filteredData.length} produtos após filtro de acentos`);
         return filteredData;
+      }
+      
+      // Para products sem searchTerm, retornar todos
+      if (table === 'products') {
+        console.log(`EXPO-SQLITE: Retornando todos os ${data.length} produtos (sem filtro)`);
+        return data;
       }
       
       console.log(`EXPO-SQLITE: ${data.length} registros encontrados na tabela ${table}`);
