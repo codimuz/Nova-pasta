@@ -186,7 +186,23 @@ const ProductSearchDropdown = memo(({
    * Renderiza um item de produto
    */
   const renderProductItem = useCallback((product) => {
-    const price = product.regular_price ? `R$ ${product.regular_price.toFixed(2)}` : 'Preço não definido';
+    // Função auxiliar para formatar preço de forma robusta
+    const formatPrice = (product) => {
+      // Tentar diferentes campos de preço para máxima compatibilidade
+      const priceValue = product.price || product.regular_price || product.club_price || 0;
+      
+      // Converter para número se for string
+      const numPrice = typeof priceValue === 'string' ? parseFloat(priceValue) : priceValue;
+      
+      // Verificar se é um número válido
+      if (isNaN(numPrice) || numPrice <= 0) {
+        return 'Preço não disponível';
+      }
+      
+      return `R$ ${numPrice.toFixed(2)}`;
+    };
+
+    const price = formatPrice(product);
     const description = `${product.product_code} • ${product.unit_type || 'UN'} • ${price}`;
     
     // Calcula a opacidade baseada no score de relevância

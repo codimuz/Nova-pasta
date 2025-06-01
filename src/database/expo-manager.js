@@ -72,8 +72,13 @@ class ExpoSQLiteManager {
         product_code TEXT UNIQUE NOT NULL,
         product_name TEXT NOT NULL,
         unit_type TEXT DEFAULT 'UN',
-        regular_price REAL DEFAULT 0.0,
+        price REAL DEFAULT 0.0,
         cost_price REAL DEFAULT 0.0,
+        image_url TEXT,
+        product_url TEXT,
+        short_ean_code TEXT,
+        total_weight_kg REAL,
+        full_description TEXT,
         category_id INTEGER DEFAULT 1,
         supplier_id INTEGER DEFAULT 1,
         is_active INTEGER DEFAULT 1,
@@ -170,15 +175,15 @@ class ExpoSQLiteManager {
         console.log('EXPO-SQLITE: Inserindo produtos de teste...');
         
         const products = [
-          ['78901234567890', 'Café Premium 250g', 'UN', 12.50, 8.75],
-          ['78901234567891', 'Açúcar Cristal 1kg', 'KG', 4.75, 3.20],
-          ['78901234567892', 'Leite Integral 1L', 'UN', 5.25, 3.80]
+          ['78901234567890', 'Café Premium 250g', 'UN', 12.50, 8.75, null, null, '78901', 0.25, 'Café Premium moído 250g - Blend especial'],
+          ['78901234567891', 'Açúcar Cristal 1kg', 'KG', 4.75, 3.20, null, null, '78902', 1.0, 'Açúcar Cristal refinado especial 1kg'],
+          ['78901234567892', 'Leite Integral 1L', 'UN', 5.25, 3.80, null, null, '78903', 1.03, 'Leite Integral UHT 1 litro']
         ];
         
-        for (const [code, name, unit, price, cost] of products) {
+        for (const [code, name, unit, price, cost, imageUrl, productUrl, shortEan, totalWeight, fullDesc] of products) {
           await executeSqlSafe(db, 
-            'INSERT INTO products (product_code, product_name, unit_type, regular_price, cost_price) VALUES (?, ?, ?, ?, ?)', 
-            [code, name, unit, price, cost]
+            'INSERT INTO products (product_code, product_name, unit_type, price, cost_price, image_url, product_url, short_ean_code, total_weight_kg, full_description) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', 
+            [code, name, unit, price, cost, imageUrl, productUrl, shortEan, totalWeight, fullDesc]
           );
         }
         

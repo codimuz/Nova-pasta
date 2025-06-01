@@ -63,13 +63,18 @@ class ProductService {
       
       for (const product of INITIAL_PRODUCTS) {
         const result = await db.runAsync(
-          'INSERT INTO products (product_code, product_name, regular_price, club_price, unit_type, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          'INSERT INTO products (product_code, product_name, price, club_price, unit_type, image_url, product_url, short_ean_code, total_weight_kg, full_description, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
           [
             product.product_code,
             product.product_name,
-            product.regular_price,
+            product.price,
             product.club_price,
             product.unit_type,
+            product.image_url,
+            product.product_url,
+            product.short_ean_code,
+            product.total_weight_kg,
+            product.full_description,
             product.created_at || now,
             product.updated_at || now
           ]
@@ -249,13 +254,18 @@ class ProductService {
       const now = new Date().toISOString();
       
       const result = await db.runAsync(
-        'INSERT INTO products (product_code, product_name, regular_price, club_price, unit_type, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO products (product_code, product_name, price, club_price, unit_type, image_url, product_url, short_ean_code, total_weight_kg, full_description, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         [
           productData.product_code,
           productData.product_name,
-          productData.regular_price || 0,
+          productData.price || 0,
           productData.club_price || 0,
           productData.unit_type || 'UN',
+          productData.image_url || null,
+          productData.product_url || null,
+          productData.short_ean_code || null,
+          productData.total_weight_kg || null,
+          productData.full_description || null,
           now,
           now
         ]
@@ -285,12 +295,17 @@ class ProductService {
       const now = new Date().toISOString();
       
       const result = await db.runAsync(
-        'UPDATE products SET product_name = ?, regular_price = ?, club_price = ?, unit_type = ?, updated_at = ? WHERE product_code = ? AND (deleted_at IS NULL OR deleted_at = "")',
+        'UPDATE products SET product_name = ?, price = ?, club_price = ?, unit_type = ?, image_url = ?, product_url = ?, short_ean_code = ?, total_weight_kg = ?, full_description = ?, updated_at = ? WHERE product_code = ? AND (deleted_at IS NULL OR deleted_at = "")',
         [
           updates.product_name,
-          updates.regular_price,
+          updates.price,
           updates.club_price,
           updates.unit_type,
+          updates.image_url,
+          updates.product_url,
+          updates.short_ean_code,
+          updates.total_weight_kg,
+          updates.full_description,
           now,
           productCode
         ]
@@ -435,7 +450,7 @@ class ProductService {
 
       // Calcular faixa de preços
       const prices = products
-        .map(p => p.regular_price || 0)
+        .map(p => p.price || 0)
         .filter(price => price > 0);
       
       if (prices.length > 0) {
@@ -472,7 +487,7 @@ class ProductService {
 
       // Verificar produtos com preços inválidos
       const [invalidPrices] = await db.getAllAsync(
-        'SELECT COUNT(*) as count FROM products WHERE (regular_price < 0 OR club_price < 0) AND deleted_at IS NULL'
+        'SELECT COUNT(*) as count FROM products WHERE (price < 0 OR club_price < 0) AND deleted_at IS NULL'
       );
 
       const result = {

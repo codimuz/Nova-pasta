@@ -188,7 +188,7 @@ const HomeScreen = () => {
     product_name: selectedProduct.product_name,
     quantity: parseFloat(quantity.trim()),
     reason_id: selectedReason.id,
-    unit_cost: selectedProduct.regular_price || 0,
+    unit_cost: selectedProduct.price || 0,
   }), [selectedProduct, quantity, selectedReason]);
 
   /**
@@ -317,6 +317,25 @@ const HomeScreen = () => {
    */
   const renderProductSearch = () => {
     if (selectedProduct) {
+      // Função auxiliar para formatar preço de forma robusta
+      const formatPrice = (product) => {
+        // Tentar diferentes campos de preço para máxima compatibilidade
+        const priceValue = product.price || product.regular_price || product.club_price || 0;
+        
+        // Converter para número se for string
+        const numPrice = typeof priceValue === 'string' ? parseFloat(priceValue) : priceValue;
+        
+        // Verificar se é um número válido
+        if (isNaN(numPrice) || numPrice <= 0) {
+          return 'Preço não disponível';
+        }
+        
+        return numPrice.toFixed(2);
+      };
+
+      const price = formatPrice(selectedProduct);
+      const unitType = selectedProduct.unit_type || 'UN';
+
       return (
         <View style={styles.chipContainer}>
           <Chip
@@ -329,7 +348,7 @@ const HomeScreen = () => {
             style={styles.productChip}
             accessibilityLabel={`Produto selecionado: ${selectedProduct.product_name}`}
           >
-            {selectedProduct.product_name} • {selectedProduct.unit_type} • R$ {selectedProduct.regular_price?.toFixed(2)}
+            {`${selectedProduct.product_name} • ${unitType} • R$ ${price}`}
           </Chip>
         </View>
       );

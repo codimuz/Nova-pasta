@@ -56,7 +56,7 @@ export const ProductsProvider = ({ children, options = {} }) => {
     }, {});
 
     const prices = products
-      .map(p => p.regular_price || 0)
+      .map(p => p.price || 0)
       .filter(price => price > 0);
     
     const priceRange = {
@@ -96,12 +96,12 @@ export const ProductsProvider = ({ children, options = {} }) => {
         }
         
         // Filtro por preço mínimo
-        if (minPrice !== undefined && (product.regular_price || 0) < minPrice) {
+        if (minPrice !== undefined && (product.price || 0) < minPrice) {
           return false;
         }
         
         // Filtro por preço máximo
-        if (maxPrice !== undefined && (product.regular_price || 0) > maxPrice) {
+        if (maxPrice !== undefined && (product.price || 0) > maxPrice) {
           return false;
         }
         
@@ -134,8 +134,8 @@ export const ProductsProvider = ({ children, options = {} }) => {
             valueB = b.product_code || '';
             break;
           case 'price':
-            valueA = a.regular_price || 0;
-            valueB = b.regular_price || 0;
+            valueA = a.price || 0;
+            valueB = b.price || 0;
             break;
           case 'unitType':
             valueA = a.unit_type || '';
