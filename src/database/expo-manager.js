@@ -321,40 +321,38 @@ class ExpoSQLiteManager {
    */
   async createTables() {
     const db = this.connection.getDatabase();
-    console.log('EXPO-SQLITE: Criando tabelas e índices a partir de constantes centralizadas...');
+    console.log('EXPO-SQLITE: Criando/Verificando tabelas, migrando colunas e criando índices...');
 
     try {
-      // Criar todas as tabelas primeiro
+      // Passo 1: Criar/Verificar todas as tabelas
       for (const tableName in TABLES) {
-        console.log(`EXPO-SQLITE: Criando tabela ${tableName}...`);
-        try {
-          await executeSqlSafe(db, TABLES[tableName]);
-          console.log(`EXPO-SQLITE: Tabela ${tableName} criada com sucesso`);
-        } catch (error) {
-          console.error(`EXPO-SQLITE: Erro ao criar tabela ${tableName}:`, error);
-          throw new Error(`Falha ao criar tabela ${tableName}: ${error.message}`);
-        }
+        console.log(`EXPO-SQLITE: Processando tabela ${tableName}...`);
+        await executeSqlSafe(db, TABLES[tableName]);
+        console.log(`EXPO-SQLITE: Tabela ${tableName} criada/verificada.`);
       }
-      console.log('EXPO-SQLITE: Todas as tabelas criadas');
+      console.log('EXPO-SQLITE: Todas as definições de tabela processadas.');
 
-      // Depois criar os índices para cada tabela
+      // Passo 2: Executar migrações de estrutura para tabelas específicas
+      // Chamamos a migração para a tabela 'entries' aqui.
+      // Se outras tabelas precisarem de migrações estruturais semelhantes no futuro,
+      // podemos adicionar chamadas para suas respectivas funções de migração aqui.
+      await this.migrateEntriesTableStructure(db);
+      console.log('EXPO-SQLITE: Migrações de estrutura de tabela concluídas.');
+
+      // Passo 3: Criar todos os índices
+      // Agora que temos certeza que as colunas existem, podemos criar os índices.
       for (const tableName in INDEXES) {
         const tableIndexes = INDEXES[tableName];
         for (const indexType in tableIndexes) {
           console.log(`EXPO-SQLITE: Criando índice ${tableName}_${indexType}...`);
-          try {
-            await executeSqlSafe(db, tableIndexes[indexType]);
-            console.log(`EXPO-SQLITE: Índice ${tableName}_${indexType} criado com sucesso`);
-          } catch (error) {
-            console.error(`EXPO-SQLITE: Erro ao criar índice ${tableName}_${indexType}:`, error);
-            throw new Error(`Falha ao criar índice ${tableName}_${indexType}: ${error.message}`);
-          }
+          await executeSqlSafe(db, tableIndexes[indexType]);
+          console.log(`EXPO-SQLITE: Índice ${tableName}_${indexType} criado com sucesso.`);
         }
       }
-      
-      console.log('EXPO-SQLITE: Todas as tabelas e índices foram criados com sucesso');
+      console.log('EXPO-SQLITE: Todos os índices foram criados com sucesso.');
+
     } catch (error) {
-      console.error('EXPO-SQLITE: Erro ao criar tabelas ou índices:', error);
+      console.error('EXPO-SQLITE: Erro durante a criação de tabelas/migração/índices:', error);
       throw error;
     }
   }
@@ -952,6 +950,54 @@ class ExpoSQLiteManager {
         }
       }
     }
+  }
+
+  /**
+   * Migrar estrutura da tabela entries
+   * Verifica e adiciona colunas entry_date e is_synchronized se necessário
+   */
+  async migrateEntriesTableStructure(db) {
+    console.log('EXPO-SQLITE: Verificando e migrando estrutura da tabela ENTRIES...');
+
+    // Obter informações das colunas da tabela entries
+    const [tableInfoResults] = await executeSqlSafe(db, "PRAGMA table_info(entries)");
+    let columnsArray = [];
+    if (tableInfoResults.rows._array) { // Para a nova API do expo-sqlite
+      columnsArray = tableInfoResults.rows._array;
+    } else { // Fallback para a API mais antiga ou outros cenários
+      for (let i = 0; i < tableInfoResults.rows.length; i++) {
+        columnsArray.push(tableInfoResults.rows.item(i));
+      }
+    }
+    const existingColumnNames = columnsArray.map(col => col.name);
+
+    // Verificar e adicionar coluna entry_date
+    if (!existingColumnNames.includes('entry_date')) {
+      console.log('EXPO-SQLITE: Coluna entry_date não encontrada. Adicionando...');
+      // Adiciona a coluna com NOT NULL e um valor DEFAULT para registros existentes e futuros
+      await executeSqlSafe(db, "ALTER TABLE entries ADD COLUMN entry_date TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))");
+      console.log('EXPO-SQLITE: Coluna entry_date adicionada com sucesso.');
+    } else {
+      console.log('EXPO-SQLITE: Coluna entry_date já existe.');
+    }
+
+    // Verificar e adicionar coluna is_synchronized
+    if (!existingColumnNames.includes('is_synchronized')) {
+      console.log('EXPO-SQLITE: Coluna is_synchronized não encontrada. Adicionando...');
+      await executeSqlSafe(db, 'ALTER TABLE entries ADD COLUMN is_synchronized INTEGER DEFAULT 0');
+      console.log('EXPO-SQLITE: Coluna is_synchronized adicionada com sucesso.');
+    } else {
+      console.log('EXPO-SQLITE: Coluna is_synchronized já existe.');
+    }
+    
+    // Garantir que registros existentes com is_synchronized NULL tenham valor 0
+    // Isto é importante se a coluna foi adicionada sem DEFAULT em alguma migração anterior
+    // ou se o DEFAULT não se aplicou a todas as linhas existentes por alguma razão.
+    await executeSqlSafe(db,
+      'UPDATE entries SET is_synchronized = 0 WHERE is_synchronized IS NULL'
+    );
+    console.log('EXPO-SQLITE: Valores NULL de is_synchronized atualizados para 0.');
+    console.log('EXPO-SQLITE: Migração da estrutura da tabela ENTRIES concluída.');
   }
 
   /**
