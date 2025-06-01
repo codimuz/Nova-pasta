@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Menu, TextInput, useTheme, Text } from 'react-native-paper';
 import { spacing } from '../../theme/spacing';
-import { dao } from '../../database/db';
+import { expoDbManager } from '../../database/expo-manager';
 
 const MotiveDropdown = ({ 
   value, 
@@ -25,7 +25,7 @@ const MotiveDropdown = ({
   
   useEffect(() => {
     if (value && reasons.length > 0) {
-      const reason = reasons.find(r => r.reason_id === value);
+      const reason = reasons.find(r => r.id === value);
       setSelectedReason(reason);
     } else {
       setSelectedReason(null);
@@ -35,8 +35,15 @@ const MotiveDropdown = ({
   const loadReasons = async () => {
     try {
       setLoading(true);
-      const data = await dao.reasons.getAll();
-      setReasons(data);
+      const data = await expoDbManager.getReasons();
+      // Mapear campos para manter compatibilidade com o código existente
+      const mappedData = data.map(reason => ({
+        reason_id: reason.id,
+        reason_name: reason.description,
+        code: reason.code,
+        ...reason
+      }));
+      setReasons(mappedData);
     } catch (error) {
       console.error('Erro ao carregar motivos:', error);
       setReasons([]);
@@ -47,7 +54,7 @@ const MotiveDropdown = ({
   
   const handleSelect = (reason) => {
     setSelectedReason(reason);
-    onValueChange(reason.reason_id);
+    onValueChange(reason.id);
     setVisible(false);
   };
   
@@ -65,7 +72,7 @@ const MotiveDropdown = ({
         anchor={
           <TextInput
             {...props}
-            value={selectedReason?.reason_name || ''}
+            value={selectedReason?.description || ''}
             onFocus={openDropdown}
             onPressIn={openDropdown}
             right={
@@ -99,16 +106,16 @@ const MotiveDropdown = ({
         ) : (
           reasons.map((reason) => (
             <Menu.Item
-              key={reason.reason_id}
+              key={reason.id}
               onPress={() => handleSelect(reason)}
-              title={reason.reason_name}
+              title={reason.description}
               titleStyle={[
                 styles.menuItem,
                 { color: theme.colors.onSurface }
               ]}
               style={[
                 styles.menuItemContainer,
-                selectedReason?.reason_id === reason.reason_id && {
+                selectedReason?.id === reason.id && {
                   backgroundColor: theme.colors.primaryContainer
                 }
               ]}

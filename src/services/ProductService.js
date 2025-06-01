@@ -1,5 +1,4 @@
-import { expoDbManager } from '../database/expo-manager';
-import { INITIAL_PRODUCTS } from '../database/schema';
+import { expoDbManager, INITIAL_PRODUCTS } from '../database/expo-manager';
 
 /**
  * Serviço para operações relacionadas a produtos

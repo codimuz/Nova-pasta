@@ -10,20 +10,22 @@ class FallbackDatabase {
         id: 1,
         product_code: '123456',
         product_name: 'Produto Teste',
-        package_type: 'Unidade',
-        regular_price: 10.50,
+        unit_type: 'UN',
+        price: 10.50,
+        club_price: 9.50,
       }]
     ]);
     
     this.entries = [];
     this.reasons = [
-      { id: 1, reason_name: 'Vencimento' },
-      { id: 2, reason_name: 'Avaria' },
-      { id: 3, reason_name: 'Roubo' },
-      { id: 4, reason_name: 'Perda operacional' },
-      { id: 5, reason_name: 'Quebra' },
-      { id: 6, reason_name: 'Devolução' },
-      { id: 7, reason_name: 'Outros' },
+      { id: '1', code: '01', description: 'Produto Vencido' },
+      { id: '2', code: '02', description: 'Produto Danificado' },
+      { id: '3', code: '03', description: 'Degustação no Depósito' },
+      { id: '4', code: '04', description: 'Degustação na Loja' },
+      { id: '5', code: '05', description: 'Furto Interno' },
+      { id: '6', code: '06', description: 'Furto na Área de Vendas' },
+      { id: '7', code: '07', description: 'Alimento Produzido para o Refeitório' },
+      { id: '8', code: '08', description: 'Furto Não Recuperado' }
     ];
   }
 
@@ -47,13 +49,24 @@ class FallbackDatabase {
   }
 
   async saveEntry(entryData) {
+    const now = new Date().toISOString();
     const entry = {
       id: this.entries.length + 1,
       ...entryData,
-      created_at: new Date().toISOString(),
+      entry_date: now,
+      created_at: now,
+      is_synchronized: 0
     };
     this.entries.push(entry);
     return entry.id;
+  }
+
+  async getUnsynchronizedEntries(reasonId) {
+    console.log('FALLBACK: Buscando entradas não sincronizadas para motivo', reasonId);
+    return this.entries.filter(entry =>
+      entry.reason_id === reasonId &&
+      (!entry.is_synchronized || entry.is_synchronized === 0)
+    );
   }
 
   async getReasons() {
