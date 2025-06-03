@@ -1,4 +1,5 @@
-import { expoDbManager, INITIAL_PRODUCTS } from '../database/expo-manager';
+import { database } from '../database';
+import Product from '../database/model/Product.js';
 
 /**
  * Serviço para operações relacionadas a produtos
@@ -21,7 +22,7 @@ class ProductService {
     return str
       .toLowerCase()
       .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '');
+      .replace(/[-]/g, '');
   }
 
   /**
@@ -42,62 +43,6 @@ class ProductService {
   }
 
   /**
-   * Inicializa produtos padrão se não existirem
-   * @returns {Promise<Array>} - Lista de produtos inicializados
-   */
-  async initializeProducts() {
-    try {
-      const existingProducts = await expoDbManager.fetchData('products');
-      
-      if (existingProducts.length > 0) {
-        console.log('ProductService: Produtos já existem no banco -', existingProducts.length, 'itens');
-        return existingProducts;
-      }
-
-      console.log('ProductService: Inicializando produtos padrão...');
-      const db = await expoDbManager.getDatabase();
-      const now = new Date().toISOString();
-      
-      const insertedProducts = [];
-      
-      for (const product of INITIAL_PRODUCTS) {
-        const result = await db.runAsync(
-          'INSERT INTO products (product_code, product_name, price, club_price, unit_type, image_url, product_url, short_ean_code, total_weight_kg, full_description, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-          [
-            product.product_code,
-            product.product_name,
-            product.price,
-            product.club_price,
-            product.unit_type,
-            product.image_url,
-            product.product_url,
-            product.short_ean_code,
-            product.total_weight_kg,
-            product.full_description,
-            product.created_at || now,
-            product.updated_at || now
-          ]
-        );
-        
-        insertedProducts.push({
-          id: result.lastInsertRowId,
-          ...product,
-          created_at: product.created_at || now,
-          updated_at: product.updated_at || now
-        });
-      }
-      
-      console.log(`ProductService: ${insertedProducts.length} produtos inicializados com sucesso`);
-      this.isInitialized = true;
-      return insertedProducts;
-      
-    } catch (error) {
-      console.error('ProductService: Erro ao inicializar produtos:', error);
-      throw new Error(`Falha ao inicializar produtos: ${error.message}`);
-    }
-  }
-
-  /**
    * Busca todos os produtos
    * @param {boolean} useCache - Se deve usar cache
    * @returns {Promise<Array>} - Lista de produtos
@@ -115,23 +60,37 @@ class ProductService {
     }
 
     try {
-      // Garantir que produtos estão inicializados
-      if (!this.isInitialized) {
-        await this.initializeProducts();
-      }
-
-      const products = await expoDbManager.fetchData('products');
+      const productsCollection = database.get('products');
+      const products = await productsCollection.query().fetch();
+      
+      // Mapear para formato esperado
+      const mappedProducts = products.map(product => ({
+        id: product.id,
+        product_code: product.product_code,
+        product_name: product.product_name,
+        price: product.price,
+        club_price: product.club_price,
+        regular_price: product.regular_price,
+        unit_type: product.unit_type,
+        image_url: product.image_url,
+        product_url: product.product_url,
+        short_ean_code: product.short_ean_code,
+        total_weight_kg: product.total_weight_kg,
+        full_description: product.full_description,
+        created_at: product.created_at,
+        updated_at: product.updated_at
+      }));
       
       // Salvar no cache
       if (useCache) {
         this.cache.set(cacheKey, {
-          data: products,
+          data: mappedProducts,
           timestamp: Date.now()
         });
       }
       
-      console.log(`ProductService: ${products.length} produtos carregados do banco`);
-      return products;
+      console.log(`ProductService: ${mappedProducts.length} produtos carregados do banco`);
+      return mappedProducts;
       
     } catch (error) {
       console.error('ProductService: Erro ao buscar todos os produtos:', error);
@@ -165,17 +124,32 @@ class ProductService {
     }
 
     try {
-      // Usar a funcionalidade existente do expo-manager para busca básica
-      const results = await expoDbManager.fetchData('products', searchTerm);
+      const productsCollection = database.get('products');
+      const products = await productsCollection.query().fetch();
       
-      // Filtrar com normalização adicional para melhor precisão
-      const filteredResults = results.filter(product => {
+      // Filtrar com normalização para melhor precisão
+      const filteredResults = products.filter(product => {
         const normalizedCode = this.normalizeString(product.product_code || '');
         const normalizedName = this.normalizeString(product.product_name || '');
         
         return normalizedCode.includes(normalizedTerm) ||
                normalizedName.includes(normalizedTerm);
-      });
+      }).map(product => ({
+        id: product.id,
+        product_code: product.product_code,
+        product_name: product.product_name,
+        price: product.price,
+        club_price: product.club_price,
+        regular_price: product.regular_price,
+        unit_type: product.unit_type,
+        image_url: product.image_url,
+        product_url: product.product_url,
+        short_ean_code: product.short_ean_code,
+        total_weight_kg: product.total_weight_kg,
+        full_description: product.full_description,
+        created_at: product.created_at,
+        updated_at: product.updated_at
+      }));
 
       // Limitar resultados
       const limitedResults = filteredResults.slice(0, maxResults);
@@ -224,17 +198,40 @@ class ProductService {
     }
 
     try {
-      const product = await expoDbManager.getProduct(productCode);
+      const productsCollection = database.get('products');
+      const products = await productsCollection.query().fetch();
+      const product = products.find(p => p.product_code === productCode);
+      
+      if (!product) {
+        return null;
+      }
+      
+      const mappedProduct = {
+        id: product.id,
+        product_code: product.product_code,
+        product_name: product.product_name,
+        price: product.price,
+        club_price: product.club_price,
+        regular_price: product.regular_price,
+        unit_type: product.unit_type,
+        image_url: product.image_url,
+        product_url: product.product_url,
+        short_ean_code: product.short_ean_code,
+        total_weight_kg: product.total_weight_kg,
+        full_description: product.full_description,
+        created_at: product.created_at,
+        updated_at: product.updated_at
+      };
       
       // Salvar no cache
-      if (useCache && product) {
+      if (useCache) {
         this.cache.set(cacheKey, {
-          data: product,
+          data: mappedProduct,
           timestamp: Date.now()
         });
       }
       
-      return product;
+      return mappedProduct;
       
     } catch (error) {
       console.error('ProductService: Erro ao buscar produto por código:', error);
@@ -245,36 +242,34 @@ class ProductService {
   /**
    * Adiciona um novo produto
    * @param {Object} productData - Dados do produto
-   * @returns {Promise<number>} - ID do produto inserido
+   * @returns {Promise<Object>} - Produto criado
    */
   async addProduct(productData) {
     try {
-      const db = await expoDbManager.getDatabase();
-      const now = new Date().toISOString();
-      
-      const result = await db.runAsync(
-        'INSERT INTO products (product_code, product_name, price, club_price, unit_type, image_url, product_url, short_ean_code, total_weight_kg, full_description, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [
-          productData.product_code,
-          productData.product_name,
-          productData.price || 0,
-          productData.club_price || 0,
-          productData.unit_type || 'UN',
-          productData.image_url || null,
-          productData.product_url || null,
-          productData.short_ean_code || null,
-          productData.total_weight_kg || null,
-          productData.full_description || null,
-          now,
-          now
-        ]
-      );
+      const product = await database.write(async () => {
+        const productsCollection = database.get('products');
+        return await productsCollection.create(product => {
+          product.product_code = productData.product_code;
+          product.product_name = productData.product_name;
+          product.price = productData.price || 0;
+          product.club_price = productData.club_price || 0;
+          product.regular_price = productData.regular_price || productData.price || 0;
+          product.unit_type = productData.unit_type || 'UN';
+          product.image_url = productData.image_url || null;
+          product.product_url = productData.product_url || null;
+          product.short_ean_code = productData.short_ean_code || null;
+          product.total_weight_kg = productData.total_weight_kg || null;
+          product.full_description = productData.full_description || null;
+          product.created_at = new Date();
+          product.updated_at = new Date();
+        });
+      });
 
       // Limpar cache para forçar atualização
       this.clearCache();
       
-      console.log('ProductService: Produto adicionado com ID:', result.lastInsertRowId);
-      return result.lastInsertRowId;
+      console.log('ProductService: Produto adicionado com ID:', product.id);
+      return product;
       
     } catch (error) {
       console.error('ProductService: Erro ao adicionar produto:', error);
@@ -290,34 +285,34 @@ class ProductService {
    */
   async updateProduct(productCode, updates) {
     try {
-      const db = await expoDbManager.getDatabase();
-      const now = new Date().toISOString();
+      const productsCollection = database.get('products');
+      const products = await productsCollection.query().fetch();
+      const product = products.find(p => p.product_code === productCode);
       
-      const result = await db.runAsync(
-        'UPDATE products SET product_name = ?, price = ?, club_price = ?, unit_type = ?, image_url = ?, product_url = ?, short_ean_code = ?, total_weight_kg = ?, full_description = ?, updated_at = ? WHERE product_code = ? AND (deleted_at IS NULL OR deleted_at = "")',
-        [
-          updates.product_name,
-          updates.price,
-          updates.club_price,
-          updates.unit_type,
-          updates.image_url,
-          updates.product_url,
-          updates.short_ean_code,
-          updates.total_weight_kg,
-          updates.full_description,
-          now,
-          productCode
-        ]
-      );
-
-      if (result.changes > 0) {
-        // Limpar cache
-        this.clearCache();
-        console.log('ProductService: Produto atualizado com sucesso');
-        return true;
+      if (!product) {
+        return false;
       }
-      
-      return false;
+
+      await database.write(async () => {
+        await product.update(product => {
+          if (updates.product_name !== undefined) product.product_name = updates.product_name;
+          if (updates.price !== undefined) product.price = updates.price;
+          if (updates.club_price !== undefined) product.club_price = updates.club_price;
+          if (updates.regular_price !== undefined) product.regular_price = updates.regular_price;
+          if (updates.unit_type !== undefined) product.unit_type = updates.unit_type;
+          if (updates.image_url !== undefined) product.image_url = updates.image_url;
+          if (updates.product_url !== undefined) product.product_url = updates.product_url;
+          if (updates.short_ean_code !== undefined) product.short_ean_code = updates.short_ean_code;
+          if (updates.total_weight_kg !== undefined) product.total_weight_kg = updates.total_weight_kg;
+          if (updates.full_description !== undefined) product.full_description = updates.full_description;
+          product.updated_at = new Date();
+        });
+      });
+
+      // Limpar cache
+      this.clearCache();
+      console.log('ProductService: Produto atualizado com sucesso');
+      return true;
       
     } catch (error) {
       console.error('ProductService: Erro ao atualizar produto:', error);
@@ -326,103 +321,32 @@ class ProductService {
   }
 
   /**
-   * Remove um produto (soft delete)
+   * Remove um produto
    * @param {string} productCode - Código do produto
    * @returns {Promise<boolean>} - True se removido com sucesso
    */
   async removeProduct(productCode) {
     try {
-      const db = await expoDbManager.getDatabase();
-      const now = new Date().toISOString();
+      const productsCollection = database.get('products');
+      const products = await productsCollection.query().fetch();
+      const product = products.find(p => p.product_code === productCode);
       
-      const result = await db.runAsync(
-        'UPDATE products SET deleted_at = ?, updated_at = ? WHERE product_code = ?',
-        [now, now, productCode]
-      );
-
-      if (result.changes > 0) {
-        // Limpar cache
-        this.clearCache();
-        console.log('ProductService: Produto removido (soft delete)');
-        return true;
+      if (!product) {
+        return false;
       }
-      
-      return false;
+
+      await database.write(async () => {
+        await product.destroyPermanently();
+      });
+
+      // Limpar cache
+      this.clearCache();
+      console.log('ProductService: Produto removido');
+      return true;
       
     } catch (error) {
       console.error('ProductService: Erro ao remover produto:', error);
       throw new Error(`Falha ao remover produto: ${error.message}`);
-    }
-  }
-
-  /**
-   * Importa produtos em lote
-   * @param {Array} productsData - Array de dados de produtos
-   * @returns {Promise<Object>} - Resultado da importação
-   */
-  async importProducts(productsData) {
-    if (!Array.isArray(productsData) || productsData.length === 0) {
-      throw new Error('Dados de produtos inválidos para importação');
-    }
-
-    try {
-      const db = await expoDbManager.getDatabase();
-      const now = new Date().toISOString();
-      
-      let inserted = 0;
-      let updated = 0;
-      let errors = [];
-
-      await db.execAsync('BEGIN TRANSACTION');
-
-      for (const productData of productsData) {
-        try {
-          // Verificar se produto já existe
-          const existing = await this.getProductByCode(productData.product_code, false);
-          
-          if (existing) {
-            // Atualizar produto existente
-            const updateResult = await this.updateProduct(productData.product_code, productData);
-            if (updateResult) updated++;
-          } else {
-            // Inserir novo produto
-            await this.addProduct(productData);
-            inserted++;
-          }
-        } catch (error) {
-          errors.push({
-            product_code: productData.product_code,
-            error: error.message
-          });
-        }
-      }
-
-      await db.execAsync('COMMIT');
-      
-      // Limpar cache após importação
-      this.clearCache();
-      
-      const result = {
-        total: productsData.length,
-        inserted,
-        updated,
-        errors: errors.length,
-        errorDetails: errors
-      };
-      
-      console.log('ProductService: Importação concluída:', result);
-      return result;
-      
-    } catch (error) {
-      try {
-        const db = await expoDbManager.getDatabase();
-        await db.execAsync('ROLLBACK');
-      } catch (rollbackError) {
-        console.error('ProductService: Erro no rollback:', rollbackError);
-      }
-      
-      console.error('ProductService: Erro na importação:', error);
-      throw new Error(`Falha na importação: ${error.message}`);
     }
   }
 
@@ -463,47 +387,6 @@ class ProductService {
     } catch (error) {
       console.error('ProductService: Erro ao obter estatísticas:', error);
       throw new Error(`Falha ao obter estatísticas: ${error.message}`);
-    }
-  }
-
-  /**
-   * Verifica integridade dos dados de produtos
-   * @returns {Promise<Object>} - Resultado da verificação
-   */
-  async checkDataIntegrity() {
-    try {
-      const db = await expoDbManager.getDatabase();
-      
-      // Verificar produtos duplicados
-      const [duplicates] = await db.getAllAsync(
-        'SELECT product_code, COUNT(*) as count FROM products WHERE deleted_at IS NULL GROUP BY product_code HAVING COUNT(*) > 1'
-      );
-
-      // Verificar produtos sem nome
-      const [missingNames] = await db.getAllAsync(
-        'SELECT COUNT(*) as count FROM products WHERE (product_name IS NULL OR product_name = "") AND deleted_at IS NULL'
-      );
-
-      // Verificar produtos com preços inválidos
-      const [invalidPrices] = await db.getAllAsync(
-        'SELECT COUNT(*) as count FROM products WHERE (price < 0 OR club_price < 0) AND deleted_at IS NULL'
-      );
-
-      const result = {
-        duplicateProducts: duplicates?.rows?._array || [],
-        missingNames: missingNames?.rows?.item(0)?.count || 0,
-        invalidPrices: invalidPrices?.rows?.item(0)?.count || 0,
-        isHealthy: duplicates?.rows?._array?.length === 0 && 
-                  (missingNames?.rows?.item(0)?.count || 0) === 0 && 
-                  (invalidPrices?.rows?.item(0)?.count || 0) === 0
-      };
-
-      console.log('ProductService: Verificação de integridade:', result);
-      return result;
-      
-    } catch (error) {
-      console.error('ProductService: Erro na verificação de integridade:', error);
-      throw new Error(`Falha na verificação: ${error.message}`);
     }
   }
 }

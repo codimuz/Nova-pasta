@@ -3,7 +3,9 @@
  * Este arquivo pode ser usado para testar a exportação de dados
  */
 
-import { expoDbManager } from '../database/expo-manager';
+import { ReasonService } from '../services/ReasonService.js';
+import { EntryService } from '../services/EntryService.js';
+import { ProductService } from '../services/ProductService.js';
 import { exportService } from '../services/ExportService';
 
 // Função para inserir dados de teste
@@ -11,56 +13,55 @@ export const insertTestData = async () => {
   try {
     console.log('TEST: Inserindo dados de teste...');
     
-    // Inicializar database
-    await expoDbManager.initialize();
+    // Buscar motivos disponíveis
+    const reasons = await ReasonService.getAllReasons();
+    if (reasons.length === 0) {
+      throw new Error('Nenhum motivo encontrado. Execute o seeder primeiro.');
+    }
     
     // Dados de teste para diferentes motivos
     const testEntries = [
       {
         product_code: '78901234567890',
-        product_name: 'Café Premium 250g',
         quantity: 5,
-        reason_id: 1, // Produto Vencido
-        unit_cost: 12.50
+        reason_id: reasons[0]?.id // Primeiro motivo disponível
       },
       {
         product_code: '78901234567891',
-        product_name: 'Açúcar Cristal 1kg',
         quantity: 2,
-        reason_id: 1, // Produto Vencido
-        unit_cost: 4.75
+        reason_id: reasons[0]?.id // Primeiro motivo disponível
       },
       {
         product_code: '78901234567892',
-        product_name: 'Leite Integral 1L',
         quantity: 3,
-        reason_id: 2, // Produto Danificado
-        unit_cost: 5.25
+        reason_id: reasons[1]?.id || reasons[0]?.id // Segundo motivo ou primeiro se não houver
       },
       {
         product_code: '78901234567890',
-        product_name: 'Café Premium 250g',
         quantity: 1,
-        reason_id: 3, // Erro de Contagem
-        unit_cost: 12.50
-      },
-      {
-        product_code: 'INEXISTENTE001',
-        product_name: 'PRODUTO NÃO CADASTRADO',
-        quantity: 10,
-        reason_id: 4, // Roubo/Furto
-        unit_cost: 0
+        reason_id: reasons[2]?.id || reasons[0]?.id // Terceiro motivo ou primeiro se não houver
       }
     ];
     
     // Inserir entradas de teste
-    for (const entry of testEntries) {
-      const entryId = await expoDbManager.insertEntry(entry);
-      console.log(`TEST: Entrada inserida com ID: ${entryId}`);
+    let insertedCount = 0;
+    for (const entryData of testEntries) {
+      try {
+        const entry = await EntryService.createEntry(
+          entryData.product_code,
+          entryData.reason_id,
+          entryData.quantity
+        );
+        console.log(`TEST: Entrada inserida com ID: ${entry.id}`);
+        insertedCount++;
+      } catch (error) {
+        console.warn(`TEST: Erro ao inserir entrada para produto ${entryData.product_code}:`, error.message);
+        // Continua com as outras entradas mesmo se uma falhar
+      }
     }
     
-    console.log(`TEST: ${testEntries.length} entradas de teste inseridas com sucesso`);
-    return testEntries.length;
+    console.log(`TEST: ${insertedCount} entradas de teste inseridas com sucesso`);
+    return insertedCount;
     
   } catch (error) {
     console.error('TEST: Erro ao inserir dados de teste:', error);
@@ -103,13 +104,16 @@ export const checkUnsynchronizedData = async () => {
     console.log('TEST: Verificando dados não sincronizados...');
     
     // Buscar todos os motivos
-    const reasons = await expoDbManager.getReasons();
+    const reasons = await ReasonService.getAllReasons();
     console.log(`TEST: ${reasons.length} motivos encontrados`);
+    
+    // Buscar todas as entradas não sincronizadas
+    const allUnsyncedEntries = await EntryService.getUnsyncedEntries();
     
     const summary = [];
     
     for (const reason of reasons) {
-      const entries = await expoDbManager.getUnsynchronizedEntriesByReason(reason.id);
+      const entries = allUnsyncedEntries.filter(entry => entry.reason_id === reason.id);
       if (entries.length > 0) {
         summary.push({
           reason: reason.code,
@@ -173,18 +177,91 @@ export const runCompleteTest = async () => {
   }
 };
 
-// Função para limpar dados de teste
-export const cleanTestData = async () => {
+// Função para verificar estatísticas dos produtos
+export const checkProductStatistics = async () => {
   try {
-    console.log('TEST: Limpando dados de teste...');
+    console.log('TEST: Verificando estatísticas dos produtos...');
     
-    // CUIDADO: Esta função apaga TODOS os dados!
-    await expoDbManager.resetDatabase();
+    const stats = await ProductService.getProductStatistics();
+    console.log('TEST: Estatísticas dos produtos:', stats);
     
-    console.log('TEST: Dados de teste limpos');
+    return stats;
     
   } catch (error) {
-    console.error('TEST: Erro ao limpar dados:', error);
+    console.error('TEST: Erro ao verificar estatísticas:', error);
+    throw error;
+  }
+};
+
+// Função para verificar integridade dos dados
+export const checkDataIntegrity = async () => {
+  try {
+    console.log('TEST: Verificando integridade dos dados...');
+    
+    // Verificar produtos
+    const productStats = await ProductService.getProductStatistics();
+    
+    // Verificar motivos
+    const reasons = await ReasonService.getAllReasons();
+    
+    // Verificar entradas
+    const allEntries = await EntryService.getAllEntries();
+    const unsyncedEntries = await EntryService.getUnsyncedEntries();
+    
+    const integrity = {
+      products: {
+        total: productStats.total,
+        byUnitType: productStats.byUnitType,
+        priceRange: productStats.priceRange
+      },
+      reasons: {
+        total: reasons.length,
+        list: reasons.map(r => ({ code: r.code, description: r.description }))
+      },
+      entries: {
+        total: allEntries.length,
+        unsynced: unsyncedEntries.length,
+        synced: allEntries.length - unsyncedEntries.length
+      }
+    };
+    
+    console.log('TEST: Integridade dos dados:', integrity);
+    return integrity;
+    
+  } catch (error) {
+    console.error('TEST: Erro ao verificar integridade:', error);
+    throw error;
+  }
+};
+
+// Função para teste rápido (sem inserção de dados)
+export const runQuickTest = async () => {
+  try {
+    console.log('TEST: ===== INICIANDO TESTE RÁPIDO =====');
+    
+    // 1. Verificar integridade
+    const integrity = await checkDataIntegrity();
+    
+    // 2. Verificar dados não sincronizados
+    const unsyncedData = await checkUnsynchronizedData();
+    
+    // 3. Verificar estrutura de exportação
+    const structure = await exportService.checkExistingStructure();
+    
+    // 4. Listar arquivos existentes
+    const existingFiles = await exportService.listExportedFiles();
+    
+    console.log('TEST: ===== TESTE RÁPIDO FINALIZADO =====');
+    
+    return {
+      integrity,
+      unsyncedData,
+      exportStructure: structure,
+      existingFiles
+    };
+    
+  } catch (error) {
+    console.error('TEST: Erro no teste rápido:', error);
     throw error;
   }
 };

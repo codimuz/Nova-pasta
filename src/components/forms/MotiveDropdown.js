@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Menu, TextInput, useTheme, Text } from 'react-native-paper';
 import { spacing } from '../../theme/spacing';
-import { expoDbManager } from '../../database/expo-manager';
+import { ReasonService } from '../../services/ReasonService.js';
 
 const MotiveDropdown = ({ 
   value, 
@@ -35,7 +35,7 @@ const MotiveDropdown = ({
   const loadReasons = async () => {
     try {
       setLoading(true);
-      const data = await expoDbManager.getReasons();
+      const data = await ReasonService.getAllReasons();
       // Mapear campos para manter compatibilidade com o código existente
       const mappedData = data.map(reason => ({
         reason_id: reason.id,

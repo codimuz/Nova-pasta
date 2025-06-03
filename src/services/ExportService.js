@@ -5,7 +5,8 @@
 
 import * as FileSystem from 'expo-file-system';
 import { Alert } from 'react-native';
-import { expoDbManager } from '../database/expo-manager';
+import { ReasonService } from './ReasonService.js';
+import { EntryService } from './EntryService.js';
 
 class ExportService {
   /**
@@ -15,11 +16,8 @@ class ExportService {
     console.log('EXPORT_SERVICE: Iniciando exportação de dados...');
     
     try {
-      // Realizar migração se necessário
-      await expoDbManager.migrateExistingEntries();
-      
       // Buscar todos os motivos cadastrados
-      const reasons = await expoDbManager.getReasons();
+      const reasons = await ReasonService.getAllReasons();
       
       if (!reasons || reasons.length === 0) {
         throw new Error('Nenhum motivo encontrado no banco de dados');
@@ -111,7 +109,8 @@ class ExportService {
       console.log(`EXPORT_SERVICE: Processando motivo ${reason.code} - ${reason.description}`);
       
       // Buscar entradas não sincronizadas para este motivo
-      const entries = await expoDbManager.getUnsynchronizedEntriesByReason(reason.id);
+      const allEntries = await EntryService.getUnsyncedEntries();
+      const entries = allEntries.filter(entry => entry.reason_id === reason.id);
       
       if (!entries || entries.length === 0) {
         console.log(`EXPORT_SERVICE: Nenhuma entrada pendente para motivo ${reason.code}`);
@@ -138,8 +137,13 @@ class ExportService {
       console.log(`EXPORT_SERVICE: Arquivo criado: ${filePath}`);
       
       // Marcar entradas como sincronizadas apenas após sucesso na gravação
-      const entryIds = entries.map(entry => entry.id);
-      await expoDbManager.markEntriesAsSynchronized(entryIds);
+      for (const entry of entries) {
+        try {
+          await EntryService.markAsSynced(entry.id);
+        } catch (error) {
+          console.error(`EXPORT_SERVICE: Erro ao marcar entrada ${entry.id} como sincronizada:`, error);
+        }
+      }
       
       return {
         reason: reason.code,
