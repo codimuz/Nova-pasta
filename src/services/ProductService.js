@@ -462,7 +462,12 @@ class ProductService {
 
             // 3.2. Extração de campos
             const productCodeStr = line.substring(0, 13);
-            const productNameStr = line.substring(13, 33).trim();
+            let productNameStr = line.substring(13, 33).trim(); // Usar 'let' para permitir reassinalação
+
+            // Sanitização do nome do produto - remover sufixo "000"
+            if (productNameStr.endsWith('000')) {
+              productNameStr = productNameStr.substring(0, productNameStr.length - 3).trim();
+            }
             const regularPriceStr = line.substring(33, 40); // 7 caracteres
 
             // 3.3. Validações de conteúdo
