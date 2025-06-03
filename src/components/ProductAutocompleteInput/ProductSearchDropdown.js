@@ -32,7 +32,7 @@ const ProductSearchDropdown = memo(({
   onProductSelect,
   onRefresh,
   onClose,
-  maxHeight = Math.min(screenHeight * 0.4, 400),
+  maxHeight = Math.min(screenHeight * 0.6, screenHeight - 200),
   highlightSearchTerm = true,
 }) => {
   const theme = useTheme();
@@ -382,9 +382,11 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     maxHeight: '100%',
+    flexGrow: 0,
   },
   scrollContent: {
     flexGrow: 1,
+    paddingBottom: 8,
   },
   listItem: {
     paddingVertical: 12,

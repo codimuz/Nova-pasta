@@ -145,19 +145,26 @@ const useProductSearch = (onProductSelect, options = {}) => {
           .map(product => {
             const normalizedCode = normalizeString(product.product_code || '');
             const normalizedName = normalizeString(product.product_name || '');
+            const normalizedShortEan = normalizeString(product.short_ean_code || '');
             
             // Calcula scores de similaridade
             const codeScore = calculateSimilarity(normalizedSearch, normalizedCode);
             const nameScore = calculateSimilarity(normalizedSearch, normalizedName);
+            const shortEanScore = calculateSimilarity(normalizedSearch, normalizedShortEan);
             
             // Verifica matches parciais
             const hasCodeMatch = isPartialMatch(normalizedSearch, normalizedCode);
             const hasNameMatch = isPartialMatch(normalizedSearch, normalizedName);
+            const hasShortEanMatch = isPartialMatch(normalizedSearch, normalizedShortEan);
+            
+            // Verifica matches exatos para short_ean_code
+            const hasExactShortEanMatch = normalizedShortEan === normalizedSearch;
             
             // Pontuação final baseada em matches exatos, parciais e similaridade
             const score = Math.max(
               hasCodeMatch ? 0.8 : codeScore,
-              hasNameMatch ? 0.9 : nameScore
+              hasNameMatch ? 0.9 : nameScore,
+              hasExactShortEanMatch ? 1 : hasShortEanMatch ? 0.95 : shortEanScore
             );
 
             return {

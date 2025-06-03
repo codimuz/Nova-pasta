@@ -165,6 +165,18 @@ const ProductSearchInput = memo(({
           mode="outlined"
           disabled={disabled}
           autoFocus={autoFocus}
+          onSubmitEditing={() => {
+            // Verifica se há correspondência exata com algum produto
+            if (filteredProducts.length > 0 && code.trim()) {
+              const exactMatch = filteredProducts.find(product => {
+                const shortEan = product.short_ean_code || '';
+                return shortEan === code.trim();
+              });
+              if (exactMatch) {
+                handleProductSelectFromDropdown(exactMatch);
+              }
+            }
+          }}
           right={
             <TextInput.Icon
               icon={code ? (isSearching ? "loading" : "close-circle") : "magnify"}

@@ -110,7 +110,8 @@ export const ProductsProvider = ({ children, options = {} }) => {
           const term = searchTerm.toLowerCase();
           const matchCode = (product.product_code || '').toLowerCase().includes(term);
           const matchName = (product.product_name || '').toLowerCase().includes(term);
-          return matchCode || matchName;
+          const matchShortEan = (product.short_ean_code || '').toLowerCase().includes(term);
+          return matchCode || matchName || matchShortEan;
         }
         
         return true;
