@@ -15,6 +15,27 @@ class ProductService {
   }
 
   /**
+   * Formata o código do produto para ter exatamente 13 caracteres
+   * @param {string} code - Código do produto
+   * @returns {string} - Código formatado com zeros à esquerda
+   */
+  formatProductCode(code) {
+    if (!code) return null;
+    return String(code).padStart(13, '0');
+  }
+
+  /**
+   * Determina o tipo de unidade baseado no nome do produto
+   * Se o nome contiver "KG" (case-insensitive), retorna "KG", caso contrário retorna "UN"
+   * @param {string} productName - Nome do produto
+   * @returns {string} - "KG" ou "UN"
+   */
+  determineUnitType(productName) {
+    if (!productName) return 'UN';
+    return productName.toUpperCase().includes('KG') ? 'KG' : 'UN';
+  }
+
+  /**
    * Verifica se o cache ainda é válido
    * @param {number} timestamp - Timestamp do cache
    * @returns {boolean} - True se o cache é válido
@@ -207,7 +228,11 @@ class ProductService {
   async getProductByCode(productCode, useCache = true) {
     if (!productCode) return null;
 
-    const cacheKey = `product_${productCode}`;
+    // Formatar código do produto para busca
+    const formattedCode = this.formatProductCode(productCode);
+    if (!formattedCode) return null;
+
+    const cacheKey = `product_${formattedCode}`;
     
     // Verificar cache
     if (useCache && this.cache.has(cacheKey)) {
@@ -222,7 +247,10 @@ class ProductService {
       const productsCollection = database.get('products');
       const products = await productsCollection
         .query(
-          Q.where('product_code', productCode),
+          Q.or(
+            Q.where('product_code', formattedCode),
+            Q.where('product_code', productCode.replace(/^0+/, '')) // Também busca sem zeros à esquerda
+          ),
           Q.where('deleted_at', null) // Apenas produtos não excluídos
         )
         .fetch();
@@ -271,15 +299,19 @@ class ProductService {
    * @returns {Promise<Object>} - Produto criado
    */
   async addProduct(productData) {
-    try {
-      const product = await database.write(async () => {
-        const productsCollection = database.get('products');
-        return await productsCollection.create(product => {
-          product.productCode = productData.product_code || productData.productCode;
-          product.productName = productData.product_name || productData.productName;
-          product.regularPrice = productData.regular_price || productData.regularPrice || 0;
-          product.clubPrice = productData.club_price || productData.clubPrice || 0;
-          product.unitType = productData.unit_type || productData.unitType || 'UN';
+      try {
+        const product = await database.write(async () => {
+          const productsCollection = database.get('products');
+          const productName = productData.product_name || productData.productName;
+          const determinedUnitType = this.determineUnitType(productName);
+  
+          return await productsCollection.create(product => {
+            const rawCode = productData.product_code || productData.productCode;
+            product.productCode = this.formatProductCode(rawCode);
+            product.productName = productName;
+            product.regularPrice = productData.regular_price || productData.regularPrice || 0;
+            product.clubPrice = productData.club_price || productData.clubPrice || 0;
+            product.unitType = productData.unit_type || productData.unitType || determinedUnitType;
         });
       });
 
@@ -302,21 +334,32 @@ class ProductService {
    * @returns {Promise<boolean>} - True se atualizado com sucesso
    */
   async updateProduct(productCode, updates) {
-    try {
-      const product = await this.getProductByCode(productCode, false);
-      
-      if (!product) {
-        return false;
-      }
-
-      await database.write(async () => {
-        const productsCollection = database.get('products');
-        const productRecord = await productsCollection.find(product.id);
+      try {
+        const formattedCode = this.formatProductCode(productCode);
+        if (!formattedCode) {
+          console.error('ProductService: Código de produto inválido para atualização:', productCode);
+          return false;
+        }
         
-        await productRecord.update(product => {
-          if (updates.product_name || updates.productName) {
-            product.productName = updates.product_name || updates.productName;
-          }
+        const product = await this.getProductByCode(formattedCode, false);
+        
+        if (!product) {
+          return false;
+        }
+  
+        await database.write(async () => {
+          const productsCollection = database.get('products');
+          const productRecord = await productsCollection.find(product.id);
+          
+          await productRecord.update(product => {
+            if (updates.product_name || updates.productName) {
+              const newProductName = updates.product_name || updates.productName;
+              product.productName = newProductName;
+              // Atualiza o unit_type baseado no novo nome se não foi explicitamente fornecido
+              if (!updates.unit_type && !updates.unitType) {
+                product.unitType = this.determineUnitType(newProductName);
+              }
+            }
           if (updates.regular_price !== undefined || updates.regularPrice !== undefined) {
             product.regularPrice = updates.regular_price || updates.regularPrice;
           }
@@ -347,7 +390,13 @@ class ProductService {
    */
   async removeProduct(productCode) {
     try {
-      const product = await this.getProductByCode(productCode, false);
+      const formattedCode = this.formatProductCode(productCode);
+      if (!formattedCode) {
+        console.error('ProductService: Código de produto inválido para remoção:', productCode);
+        return false;
+      }
+      
+      const product = await this.getProductByCode(formattedCode, false);
       
       if (!product) {
         return false;
@@ -516,7 +565,7 @@ class ProductService {
             // 3.5. Verificar se produto já existe no banco
             const existingProducts = await productsCollection
               .query(
-                Q.where('product_code', productCodeStr),
+                Q.where('product_code', this.formatProductCode(productCodeStr)),
                 Q.where('deleted_at', null) // Apenas produtos não excluídos
               )
               .fetch();
@@ -525,8 +574,9 @@ class ProductService {
               // 3.6. Produto existe - fazer UPDATE
               const productToUpdate = existingProducts[0];
               await productToUpdate.update(product => {
-                product.productName = productNameStr;
-                product.regularPrice = regularPriceNum;
+                              product.productName = productNameStr;
+                              product.regularPrice = regularPriceNum;
+                              product.unitType = this.determineUnitType(productNameStr);
                 // updatedAt será gerenciado automaticamente pelo WatermelonDB
               });
               stats.updated++;
@@ -534,11 +584,11 @@ class ProductService {
             } else {
               // 3.7. Produto não existe - fazer CREATE
               await productsCollection.create(product => {
-                product.productCode = productCodeStr;
-                product.productName = productNameStr;
-                product.regularPrice = regularPriceNum;
-                product.clubPrice = 0; // Valor padrão
-                product.unitType = 'UN'; // Valor padrão
+                              product.productCode = productCodeStr;
+                              product.productName = productNameStr;
+                              product.regularPrice = regularPriceNum;
+                              product.clubPrice = 0; // Valor padrão
+                              product.unitType = this.determineUnitType(productNameStr);
                 // createdAt e updatedAt serão gerenciados automaticamente pelo WatermelonDB
               });
               stats.inserted++;

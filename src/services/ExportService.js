@@ -7,8 +7,73 @@ import * as FileSystem from 'expo-file-system';
 import { Alert } from 'react-native';
 import { ReasonService } from './ReasonService.js';
 import { EntryService } from './EntryService.js';
+import { productService } from './ProductService.js';
 
 class ExportService {
+  /**
+   * Consolida entradas por código de produto, somando as quantidades
+   * @param {Array} entries - Lista de entradas a serem consolidadas
+   * @returns {Array} - Lista de entradas consolidadas
+   */
+  async consolidateEntries(entries) {
+    try {
+      // Agrupar entradas por product_code e somar quantities
+      const consolidated = entries.reduce((acc, entry) => {
+        if (!acc[entry.product_code]) {
+          acc[entry.product_code] = {
+            product_code: entry.product_code,
+            quantity: 0
+          };
+        }
+        acc[entry.product_code].quantity += entry.quantity;
+        return acc;
+      }, {});
+      
+      return Object.values(consolidated);
+    } catch (error) {
+      console.error('EXPORT_SERVICE: Erro ao consolidar entradas:', error);
+      throw new Error(`Falha ao consolidar entradas: ${error.message}`);
+    }
+  }
+
+  /**
+   * Formata a quantidade baseado no tipo de unidade do produto
+   * KG: permite frações (ex: 1.750)
+   * UN: sempre inteiro arredondado para baixo (ex: 1.000)
+   * @param {number} quantity - Quantidade a ser formatada
+   * @param {string} product_code - Código do produto para determinar o unit_type
+   * @returns {string|null} - Quantidade formatada ou null se erro
+   */
+  async formatQuantity(quantity, product_code) {
+    try {
+      const product = await productService.getProductByCode(product_code);
+      if (!product) throw new Error(`Produto não encontrado: ${product_code}`);
+      
+      const isKG = product.unit_type === 'KG';
+      let formattedQuantity = quantity;
+      
+      if (!isKG) {
+        // Para UN, arredondar para baixo
+        formattedQuantity = Math.floor(quantity);
+      }
+      
+      // Formatar com 3 casas decimais usando ponto
+      return formattedQuantity.toFixed(3);
+    } catch (error) {
+      console.error(`EXPORT_SERVICE: Erro ao formatar quantidade: ${error.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * Formata o código do produto para ter exatamente 13 caracteres
+   * @param {string} code - Código do produto
+   * @returns {string} - Código formatado com zeros à esquerda
+   */
+  formatProductCode(code) {
+    return String(code).padStart(13, '0');
+  }
+
   /**
    * Realizar exportação completa de dados
    */
@@ -119,15 +184,24 @@ class ExportService {
       
       console.log(`EXPORT_SERVICE: ${entries.length} entradas encontradas para motivo ${reason.code}`);
       
+      // Consolidar entradas por produto
+      const consolidatedEntries = await this.consolidateEntries(entries);
+      console.log(`EXPORT_SERVICE: ${consolidatedEntries.length} produtos únicos após consolidação`);
+      
       // Criar diretório específico do motivo
       const reasonDir = await this.createReasonDirectory(reason.code);
       
-      // Gerar nome do arquivo com data atual
+      // Gerar nome do arquivo com data e hora
       const fileName = this.generateFileName(reason.code);
       const filePath = `${reasonDir}${fileName}`;
       
-      // Gerar conteúdo do arquivo
-      const fileContent = this.generateFileContent(entries);
+      // Gerar conteúdo do arquivo com validações
+      const { content: fileContent, validCount, errors } = await this.generateFileContent(consolidatedEntries);
+      
+      if (validCount === 0) {
+        console.log(`EXPORT_SERVICE: Nenhuma entrada válida para exportar no motivo ${reason.code}`);
+        return null;
+      }
       
       // Salvar arquivo
       await FileSystem.writeAsStringAsync(filePath, fileContent, {
@@ -149,7 +223,9 @@ class ExportService {
         reason: reason.code,
         fileName: fileName,
         filePath: filePath,
-        entriesCount: entries.length
+        entriesCount: validCount,
+        errorsCount: errors.length,
+        errors: errors
       };
       
     } catch (error) {
@@ -181,31 +257,65 @@ class ExportService {
   }
   
   /**
-   * Gerar nome do arquivo com padrão motivoXX_YYYYMMDD.txt
+   * Gerar nome do arquivo com padrão motivoXX_YYYYMMDD_HHMMSS.txt
+   * Inclui hora/minuto/segundo para garantir unicidade
    */
   generateFileName(reasonCode) {
     const now = new Date();
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, '0');
     const day = String(now.getDate()).padStart(2, '0');
+    const hour = String(now.getHours()).padStart(2, '0');
+    const minute = String(now.getMinutes()).padStart(2, '0');
+    const second = String(now.getSeconds()).padStart(2, '0');
     
     const dateStr = `${year}${month}${day}`;
+    const timeStr = `${hour}${minute}${second}`;
     const paddedCode = reasonCode.padStart(2, '0');
     
-    return `motivo${paddedCode}_${dateStr}.txt`;
+    return `motivo${paddedCode}_${dateStr}_${timeStr}.txt`;
   }
   
   /**
    * Gerar conteúdo do arquivo no formato especificado
+   * com validações e formatações necessárias
    */
-  generateFileContent(entries) {
-    const lines = entries.map(entry => {
-      // Formato: "Inventario [product_code] [quantity]"
-      return `Inventario ${entry.product_code} ${entry.quantity}`;
-    });
+  async generateFileContent(entries) {
+    const validEntries = [];
+    const errors = [];
+    
+    for (const entry of entries) {
+      try {
+        // Formatar e validar código do produto
+        const formattedCode = this.formatProductCode(entry.product_code);
+        if (!/^\d{13}$/.test(formattedCode)) {
+          errors.push(`Código inválido: ${entry.product_code}`);
+          continue;
+        }
+        
+        // Formatar e validar quantidade
+        const formattedQuantity = await this.formatQuantity(entry.quantity, entry.product_code);
+        if (formattedQuantity === null || parseFloat(formattedQuantity) <= 0) {
+          errors.push(`Quantidade inválida para produto ${entry.product_code}: ${entry.quantity}`);
+          continue;
+        }
+        
+        validEntries.push(`Inventario ${formattedCode} ${formattedQuantity}`);
+      } catch (error) {
+        errors.push(`Erro ao processar produto ${entry.product_code}: ${error.message}`);
+      }
+    }
+    
+    if (errors.length > 0) {
+      console.warn('EXPORT_SERVICE: Avisos na geração do conteúdo:', errors);
+    }
     
     // Adicionar quebra de linha no final
-    return lines.join('\n') + '\n';
+    return {
+      content: validEntries.join('\n') + '\n',
+      validCount: validEntries.length,
+      errors: errors
+    };
   }
   
   /**
@@ -234,12 +344,23 @@ class ExportService {
     if (exportedFiles.length > 0) {
       message += `\nArquivos gerados:\n`;
       exportedFiles.forEach(file => {
-        message += `• ${file.fileName} (${file.entriesCount} entradas)\n`;
+        let fileInfo = `• ${file.fileName} (${file.entriesCount} entradas)`;
+        if (file.errorsCount > 0) {
+          fileInfo += ` - ${file.errorsCount} avisos`;
+        }
+        message += fileInfo + '\n';
+        
+        // Exibir avisos específicos do arquivo se houver
+        if (file.errors && file.errors.length > 0) {
+          file.errors.forEach(error => {
+            message += `    - ${error}\n`;
+          });
+        }
       });
     }
     
     if (errors.length > 0) {
-      message += `\nErros encontrados:\n`;
+      message += `\nErros gerais:\n`;
       errors.forEach(error => {
         message += `• Motivo ${error.reason}: ${error.error}\n`;
       });

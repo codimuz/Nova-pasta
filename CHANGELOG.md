@@ -6,6 +6,25 @@ O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.
 e este projeto segue [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
 ## [Não Lançado]
+### Alterado
+- 📤 **Sistema de Exportação**
+  - Consolidação automática de lançamentos por código de produto
+  - Formatação inteligente de quantidades baseada no tipo de unidade:
+    - KG: mantém frações decimais (ex: 1.750)
+    - UN: arredonda para baixo e formata como X.000
+  - Validações aprimoradas para dados exportados
+  - Nomes de arquivos únicos com timestamp completo
+  - Interface aprimorada com detalhamento de erros e avisos
+- 🆔 **Gestão de Produtos**
+  - Padronização do formato de códigos de produto em todas as operações
+  - Busca inteligente que funciona com ou sem zeros à esquerda
+
+### Corrigido
+- Preenchimento automático de zeros à esquerda nos códigos de produto (13 dígitos)
+- Busca de produtos falhando quando código continha zeros à esquerda
+- Evita sobrescrita de arquivos exportados no mesmo dia
+- Validação rigorosa do formato de códigos de produto
+
 ### Planejado
 - Sistema de backup automático
 - Sincronização em nuvem
