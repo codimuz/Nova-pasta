@@ -202,6 +202,8 @@ export const useProductsOperations = () => {
     addProduct,
     updateProduct,
     removeProduct,
+    importProducts,
+    importProductsFromTxt,
     refresh,
     clearCache,
     debouncedSearch,
@@ -214,6 +216,8 @@ export const useProductsOperations = () => {
     addProduct,
     updateProduct,
     removeProduct,
+    importProducts,
+    importProductsFromTxt,
     refresh,
     clearCache,
     debouncedSearch,
@@ -226,6 +230,20 @@ export const useProductsOperations = () => {
 export const useProductsUtils = () => {
   const { utils, statistics } = useProductsContext();
   return { ...utils, statistics };
+};
+
+/**
+ * Hook específico para importação de produtos
+ */
+export const useProductsImport = () => {
+  const { importProducts, importProductsFromTxt, loading, error } = useProductsContext();
+  
+  return {
+    importProducts,
+    importProductsFromTxt,
+    importing: loading,
+    importError: error,
+  };
 };
 
 /**

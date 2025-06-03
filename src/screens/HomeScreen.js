@@ -20,6 +20,9 @@ import {
   ActivityIndicator,
   Banner,
   ProgressBar,
+  Dialog,
+  Portal,
+  Text,
 } from 'react-native-paper';
 
 // Services
@@ -28,7 +31,7 @@ import { ReasonService } from '../services/ReasonService.js';
 import { exportService } from '../services/ExportService';
 
 // Contexts
-import { useProductsData, useProductsOperations } from '../contexts/ProductsContext';
+import { useProductsData, useProductsOperations, useProductsImport } from '../contexts/ProductsContext';
 
 // Components
 import ThemeToggle from '../components/common/ThemeToggle';
@@ -78,6 +81,8 @@ const HomeScreen = () => {
   const [fabOpen, setFabOpen] = useState(false);
   const [initializing, setInitializing] = useState(true);
   const [initError, setInitError] = useState(null);
+  const [showImportDialog, setShowImportDialog] = useState(false);
+  const [importStats, setImportStats] = useState(null);
 
   // Estados do produto selecionado
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -85,6 +90,7 @@ const HomeScreen = () => {
   // Contexto de produtos
   const { products, loading: productsLoading, error: productsError, initialized: productsInitialized } = useProductsData();
   const { refresh: refreshProducts } = useProductsOperations();
+  const { importProductsFromTxt, importing, importError } = useProductsImport();
 
   /**
    * Carrega os motivos de entrada do banco de dados
@@ -240,16 +246,47 @@ const HomeScreen = () => {
   }, [validateFormData, selectedProduct, selectedReason, quantity, resetForm]);
 
   /**
-   * Manipula a importação de dados
-   * TODO: Implementar funcionalidade de importação
+   * Manipula a importação de produtos a partir de arquivo TXT
+   */
+  const handleImportProducts = useCallback(async () => {
+    try {
+      console.log('HomeScreen: Iniciando importação de produtos...');
+      const stats = await importProductsFromTxt();
+      
+      setImportStats(stats);
+      setShowImportDialog(true);
+      
+      console.log('HomeScreen: Importação concluída:', stats);
+    } catch (error) {
+      console.error('HomeScreen: Erro na importação:', error);
+      Alert.alert(
+        'Erro na Importação',
+        `Falha ao importar produtos: ${error.message}`,
+        [{ text: 'OK' }]
+      );
+    }
+  }, [importProductsFromTxt]);
+
+  /**
+   * Manipula a importação de dados (outros tipos)
    */
   const handleImport = useCallback(() => {
     Alert.alert(
       'Importar Dados',
-      'Funcionalidade de importação será implementada em breve.',
-      [{ text: 'OK' }]
+      'Escolha o tipo de importação:',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { 
+          text: 'Produtos (TXT)', 
+          onPress: handleImportProducts 
+        },
+        { 
+          text: 'Outros Dados', 
+          onPress: () => Alert.alert('Info', 'Funcionalidade será implementada em breve.') 
+        },
+      ]
     );
-  }, []);
+  }, [handleImportProducts]);
 
   /**
    * Manipula a exportação de dados não sincronizados
@@ -307,6 +344,58 @@ const HomeScreen = () => {
       Alert.alert('Erro', 'Falha ao atualizar dados. Tente novamente.');
     }
   }, [refreshProducts, loadReasons, forceRefresh, clearCache]);
+
+  /**
+   * Renderiza o diálogo de resultados da importação
+   */
+  const renderImportDialog = () => {
+    if (!importStats) return null;
+
+    const hasErrors = importStats.errors && importStats.errors.length > 0;
+    const hasSuccess = importStats.inserted > 0 || importStats.updated > 0;
+
+    return (
+      <Portal>
+        <Dialog visible={showImportDialog} onDismiss={() => setShowImportDialog(false)}>
+          <Dialog.Title>Resultado da Importação</Dialog.Title>
+          <Dialog.Content>
+            <Text variant="bodyMedium" style={{ marginBottom: 8 }}>
+              <Text style={{ fontWeight: 'bold' }}>Produtos inseridos:</Text> {importStats.inserted}
+            </Text>
+            <Text variant="bodyMedium" style={{ marginBottom: 8 }}>
+              <Text style={{ fontWeight: 'bold' }}>Produtos atualizados:</Text> {importStats.updated}
+            </Text>
+            <Text variant="bodyMedium" style={{ marginBottom: 16 }}>
+              <Text style={{ fontWeight: 'bold' }}>Erros encontrados:</Text> {importStats.errors.length}
+            </Text>
+            
+            {hasErrors && (
+              <View>
+                <Text variant="titleSmall" style={{ marginBottom: 8, color: 'red' }}>
+                  Detalhes dos Erros:
+                </Text>
+                <ScrollView style={{ maxHeight: 200 }}>
+                  {importStats.errors.slice(0, 10).map((error, index) => (
+                    <Text key={index} variant="bodySmall" style={{ marginBottom: 4 }}>
+                      Linha {error.lineNumber}: {error.error}
+                    </Text>
+                  ))}
+                  {importStats.errors.length > 10 && (
+                    <Text variant="bodySmall" style={{ fontStyle: 'italic' }}>
+                      ... e mais {importStats.errors.length - 10} erros
+                    </Text>
+                  )}
+                </ScrollView>
+              </View>
+            )}
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setShowImportDialog(false)}>OK</Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
+    );
+  };
 
   /**
    * Renderiza busca de produtos ou chip do produto selecionado
@@ -400,6 +489,17 @@ const HomeScreen = () => {
           icon="alert"
         >
           Erro ao carregar produtos: {productsError}
+        </Banner>
+      );
+    }
+
+    if (importing) {
+      return (
+        <Banner
+          visible={true}
+          icon="upload"
+        >
+          Importando produtos... Aguarde.
         </Banner>
       );
     }
@@ -503,6 +603,7 @@ const HomeScreen = () => {
             icon: 'upload',
             label: 'Importar',
             onPress: handleImport,
+            disabled: importing,
           },
           {
             icon: 'download',
@@ -512,6 +613,8 @@ const HomeScreen = () => {
         ]}
         onStateChange={({ open }) => setFabOpen(open)}
       />
+
+      {renderImportDialog()}
     </View>
   );
 };

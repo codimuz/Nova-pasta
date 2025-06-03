@@ -40,7 +40,6 @@ const useProducts = (options = {}) => {
     return (now - lastFetchRef.current) < cacheTimeout;
   }, [enableCache, cacheTimeout]);
 
-
   /**
    * Carrega todos os produtos do banco de dados
    */
@@ -261,28 +260,41 @@ const useProducts = (options = {}) => {
   }, [clearCache, loadProducts]);
 
   /**
-   * Recarrega dados forçando refresh
+   * Importa produtos a partir de um arquivo TXT
+   * @returns {Promise<Object>} - Estatísticas da importação
    */
-  const refresh = useCallback(async () => {
-    clearCache();
-    productService.clearCache(); // Limpar cache do service também
-    return await loadProducts(true);
+  const importProductsFromTxt = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      console.log('useProducts: Iniciando importação de produtos de arquivo TXT...');
+      const stats = await productService.importProductsFromTxt();
+
+      // Limpar cache e recarregar se houve inserções ou atualizações
+      if (stats.inserted > 0 || stats.updated > 0) {
+        clearCache();
+        await loadProducts(true);
+      }
+
+      console.log('useProducts: Importação concluída:', {
+        inserted: stats.inserted,
+        updated: stats.updated,
+        errors: stats.errors.length
+      });
+
+      return stats;
+    } catch (err) {
+      console.error('useProducts: Erro na importação de TXT:', err);
+      setError(`Falha na importação: ${err.message}`);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
   }, [clearCache, loadProducts]);
 
   /**
-   * Obtém estatísticas dos produtos
-   */
-  const getStatistics = useCallback(async () => {
-    try {
-      return await productService.getProductStatistics();
-    } catch (err) {
-      console.error('useProducts: Erro ao obter estatísticas:', err);
-      throw new Error(`Falha ao obter estatísticas: ${err.message}`);
-    }
-  }, []);
-
-  /**
-   * Importa produtos em lote
+   * Importa produtos em lote (dados passados por parâmetro)
    */
   const importProducts = useCallback(async (productsData) => {
     try {
@@ -304,6 +316,27 @@ const useProducts = (options = {}) => {
       setLoading(false);
     }
   }, [clearCache, loadProducts]);
+
+  /**
+   * Recarrega dados forçando refresh
+   */
+  const refresh = useCallback(async () => {
+    clearCache();
+    productService.clearCache(); // Limpar cache do service também
+    return await loadProducts(true);
+  }, [clearCache, loadProducts]);
+
+  /**
+   * Obtém estatísticas dos produtos
+   */
+  const getStatistics = useCallback(async () => {
+    try {
+      return await productService.getProductStatistics();
+    } catch (err) {
+      console.error('useProducts: Erro ao obter estatísticas:', err);
+      throw new Error(`Falha ao obter estatísticas: ${err.message}`);
+    }
+  }, []);
 
   /**
    * Verifica integridade dos dados
@@ -355,6 +388,7 @@ const useProducts = (options = {}) => {
     updateProduct,
     removeProduct,
     importProducts,
+    importProductsFromTxt,
     
     // Utilitários
     refresh,
