@@ -22,8 +22,9 @@ import {
   ProgressBar,
 } from 'react-native-paper';
 
-// Services e Managers
-import { expoDbManager } from '../database/expo-manager';
+// Services
+import { EntryService } from '../services/EntryService.js';
+import { ReasonService } from '../services/ReasonService.js';
 import { exportService } from '../services/ExportService';
 
 // Contexts
@@ -32,7 +33,6 @@ import { useProductsData, useProductsOperations } from '../contexts/ProductsCont
 // Components
 import ThemeToggle from '../components/common/ThemeToggle';
 import ProductSearchInput from '../components/ProductAutocompleteInput/ProductSearchInput';
-
 
 /**
  * HomeScreen Component Refatorado
@@ -92,11 +92,12 @@ const HomeScreen = () => {
    */
   const loadReasons = useCallback(async () => {
     try {
-      const reasonsData = await expoDbManager.fetchData('reasons');
+      const reasonsData = await ReasonService.getAllReasons();
       setReasons(reasonsData);
       console.log('HomeScreen: Motivos carregados com sucesso -', reasonsData.length, 'itens');
     } catch (error) {
       console.error('HomeScreen: Erro ao carregar motivos:', error);
+      setInitError(error.message || 'Falha ao carregar motivos');
       throw new Error('Falha ao carregar motivos');
     }
   }, []);
@@ -112,8 +113,7 @@ const HomeScreen = () => {
 
       console.log('HomeScreen: Iniciando inicialização...');
       
-      // Inicializar banco de dados
-      await expoDbManager.initialize();
+      // A inicialização do banco de dados agora é centralizada no App.js através da função initializeDatabase do WatermelonDB
       
       // Carregar motivos
       await loadReasons();
@@ -180,18 +180,6 @@ const HomeScreen = () => {
   }, [selectedReason, selectedProduct, quantity]);
 
   /**
-   * Cria objeto de dados para entrada no banco
-   * @returns {Object} - Dados formatados para inserção
-   */
-  const createEntryData = useCallback(() => ({
-    product_code: selectedProduct.product_code,
-    product_name: selectedProduct.product_name,
-    quantity: parseFloat(quantity.trim()),
-    reason_id: selectedReason.id,
-    unit_cost: selectedProduct.price || 0,
-  }), [selectedProduct, quantity, selectedReason]);
-
-  /**
    * Limpa o formulário após salvamento bem-sucedido
    */
   const resetForm = useCallback(() => {
@@ -213,11 +201,19 @@ const HomeScreen = () => {
         return;
       }
 
-      // Criar dados da entrada
-      const entryData = createEntryData();
-      
-      // Inserir no banco de dados
-      const entryId = await expoDbManager.insertEntry(entryData);
+      // Validar se produto e motivo estão selecionados
+      if (!selectedProduct || !selectedReason) {
+        Alert.alert('Erro de Validação', 'Produto ou Motivo não selecionado.');
+        return;
+      }
+
+      // Criar entrada usando EntryService
+      const entry = await EntryService.createEntry(
+        selectedProduct.product_code, // Código de barras do produto
+        selectedReason.id,            // ID do WatermelonDB da Reason
+        parseFloat(quantity.trim())   // Quantidade
+      );
+      const entryId = entry.id; // Obter o ID da entrada criada pelo WatermelonDB
       
       // Feedback de sucesso e limpeza do formulário
       Alert.alert(
@@ -231,7 +227,7 @@ const HomeScreen = () => {
         ]
       );
       
-      console.log('HomeScreen: Entrada salva com sucesso:', { entryId, ...entryData });
+      console.log('HomeScreen: Entrada salva com sucesso:', { entryId, product_code: selectedProduct.product_code, quantity: parseFloat(quantity.trim()) });
       
     } catch (error) {
       console.error('HomeScreen: Erro ao salvar entrada:', error);
@@ -241,7 +237,7 @@ const HomeScreen = () => {
         [{ text: 'OK' }]
       );
     }
-  }, [validateFormData, createEntryData, resetForm]);
+  }, [validateFormData, selectedProduct, selectedReason, quantity, resetForm]);
 
   /**
    * Manipula a importação de dados
