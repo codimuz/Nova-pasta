@@ -7,7 +7,7 @@ async function runInitialSeeders(database) {
     const currentTimestamp = new Date().getTime();
     // Dados iniciais para reasons
     const initialReasons = [
-        { code: '01', description: 'Produto Vencido', created_at: currentTimestamp, updated_at: currentTimestamp },
+        { code: '01', description: 'Produto Vencido', createdAt: new Date(currentTimestamp), updatedAt: new Date(currentTimestamp) },
         { code: '02', description: 'Produto Danificado', created_at: currentTimestamp, updated_at: currentTimestamp },
         { code: '03', description: 'Erro de Contagem', created_at: currentTimestamp, updated_at: currentTimestamp },
         { code: '04', description: 'Roubo/Furto', created_at: currentTimestamp, updated_at: currentTimestamp },
@@ -27,17 +27,17 @@ async function runInitialSeeders(database) {
         await Promise.all(initialReasons.map(reason => reasonsCollection.create(record => {
             record.code = reason.code;
             record.description = reason.description;
-            record.created_at = reason.created_at;
-            record.updated_at = reason.updated_at;
+            record.createdAt = reason.createdAt;
+            record.updatedAt = reason.updatedAt;
         })));
         await Promise.all(initialProducts.map(product => productsCollection.create(record => {
-            record.product_code = product.product_code;
-            record.product_name = product.product_name;
-            record.regular_price = product.regular_price;
-            record.club_price = product.club_price;
-            record.unit_type = product.unit_type;
-            record.created_at = product.created_at;
-            record.updated_at = product.updated_at;
+            record.productCode = product.productCode;
+            record.productName = product.productName;
+            record.regularPrice = product.regularPrice;
+            record.clubPrice = product.clubPrice;
+            record.unitType = product.unitType;
+            record.createdAt = product.createdAt;
+            record.updatedAt = product.updatedAt;
         })));
     });
     console.log('Seeders executados com sucesso!');

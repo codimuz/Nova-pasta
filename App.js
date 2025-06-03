@@ -4,7 +4,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { PaperProvider } from 'react-native-paper';
 import { ThemeProvider, useAppTheme } from './src/contexts/ThemeContext';
 import { ProductsProvider } from './src/contexts/ProductsContext';
-import { expoDbManager } from './src/database/expo-manager';
+import { initializeDatabase } from './src/database';
 import HomeScreen from './src/screens/HomeScreen';
 
 // Component that uses the theme context and manages StatusBar
@@ -14,7 +14,8 @@ const AppContent = () => {
   useEffect(() => {
     const initializeApp = async () => {
       try {
-        await expoDbManager.initialize();
+        await initializeDatabase();
+        console.log('App initialized with WatermelonDB successfully');
         console.log('App initialized successfully');
       } catch (error) {
         console.error('Erro ao inicializar aplicativo:', error);
