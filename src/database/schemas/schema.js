@@ -54,5 +54,17 @@ export default appSchema({
         { name: 'updated_at', type: 'number' },
       ],
     }),
+    tableSchema({
+      name: 'imports',
+      columns: [
+        { name: 'file_name', type: 'string' },
+        { name: 'import_date', type: 'number' }, // Armazenado como timestamp
+        { name: 'items_updated', type: 'number', isOptional: true },
+        { name: 'items_inserted', type: 'number', isOptional: true },
+        { name: 'source', type: 'string', isOptional: true },
+        { name: 'created_at', type: 'number' },
+        { name: 'updated_at', type: 'number' },
+      ],
+    }),
   ],
 });
