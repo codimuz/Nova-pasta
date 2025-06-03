@@ -34,14 +34,17 @@ export class EntryService {
       // Criar a entrada
       const entriesCollection = database.get('entries');
       const entry = await entriesCollection.create(entry => {
-        entry.productCode = productCode;
+        // Definir campos básicos
+        entry.productCodeValue = productCode;
         entry.productName = product.productName;
         entry.quantity = quantity;
-        entry.reasonId = reasonId;
-        entry.unitCost = product.price || 0;
-        entry.createdAt = new Date();
-        entry.updatedAt = new Date();
-        entry.synced = false; // Entrada não sincronizada inicialmente
+        entry.reasonCodeValue = reason.code;
+        entry.entryDate = new Date();
+        entry.isSynchronized = false;
+
+        // Configurar relações
+        entry.product.set(product);
+        entry.reason.set(reason);
       });
 
       console.log('EntryService: Entrada criada com sucesso:', entry.id);
@@ -59,14 +62,13 @@ export class EntryService {
     
     return entries.map(entry => ({
       id: entry.id,
-      productCode: entry.productCode,
-      productName: entry.productName,
+      product_code: entry.productCodeValue,
+      product_name: entry.productName,
       quantity: entry.quantity,
-      reasonId: entry.reasonId,
-      unitCost: entry.unitCost,
-      createdAt: entry.createdAt,
-      updatedAt: entry.updatedAt,
-      synced: entry.synced,
+      reason_id: entry.linkedReasonId,
+      reason_code: entry.reasonCodeValue,
+      entry_date: entry.entryDate,
+      is_synchronized: entry.isSynchronized
     }));
   }
 
@@ -77,18 +79,17 @@ export class EntryService {
   static async getUnsyncedEntries() {
     const entriesCollection = database.get('entries');
     const entries = await entriesCollection.query().fetch();
-    const unsyncedEntries = entries.filter(entry => !entry.synced);
+    const unsyncedEntries = entries.filter(entry => !entry.isSynchronized);
     
     return unsyncedEntries.map(entry => ({
       id: entry.id,
-      productCode: entry.productCode,
-      productName: entry.productName,
+      product_code: entry.productCodeValue,
+      product_name: entry.productName,
       quantity: entry.quantity,
-      reasonId: entry.reasonId,
-      unitCost: entry.unitCost,
-      createdAt: entry.createdAt,
-      updatedAt: entry.updatedAt,
-      synced: entry.synced,
+      reason_id: entry.reason.id,
+      reason_code: entry.reasonCodeValue,
+      entry_date: entry.entryDate,
+      is_synchronized: entry.isSynchronized
     }));
   }
 
@@ -103,8 +104,7 @@ export class EntryService {
       const entry = await entriesCollection.find(entryId);
       
       return await entry.update(entry => {
-        entry.synced = true;
-        entry.updatedAt = new Date();
+        entry.isSynchronized = true;
       });
     });
   }
@@ -134,14 +134,13 @@ export class EntryService {
       
       return {
         id: entry.id,
-        productCode: entry.productCode,
-        productName: entry.productName,
+        product_code: entry.productCodeValue,
+        product_name: entry.productName,
         quantity: entry.quantity,
-        reasonId: entry.reasonId,
-        unitCost: entry.unitCost,
-        createdAt: entry.createdAt,
-        updatedAt: entry.updatedAt,
-        synced: entry.synced,
+        reason_id: entry.reason.id,
+        reason_code: entry.reasonCodeValue,
+        entry_date: entry.entryDate,
+        is_synchronized: entry.isSynchronized
       };
     } catch (error) {
       console.error('EntryService: Erro ao buscar entrada por ID:', error);
