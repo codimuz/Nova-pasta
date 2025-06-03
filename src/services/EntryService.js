@@ -17,7 +17,7 @@ export class EntryService {
       // Buscar o produto pelo código
       const productsCollection = database.get('products');
       const products = await productsCollection.query().fetch();
-      const product = products.find(p => p.product_code === productCode);
+      const product = products.find(p => p.productCode === productCode);
       
       if (!product) {
         throw new Error(`Produto com código ${productCode} não encontrado`);
@@ -34,13 +34,13 @@ export class EntryService {
       // Criar a entrada
       const entriesCollection = database.get('entries');
       const entry = await entriesCollection.create(entry => {
-        entry.product_code = productCode;
-        entry.product_name = product.product_name;
+        entry.productCode = productCode;
+        entry.productName = product.productName;
         entry.quantity = quantity;
-        entry.reason_id = reasonId;
-        entry.unit_cost = product.price || 0;
-        entry.created_at = new Date();
-        entry.updated_at = new Date();
+        entry.reasonId = reasonId;
+        entry.unitCost = product.price || 0;
+        entry.createdAt = new Date();
+        entry.updatedAt = new Date();
         entry.synced = false; // Entrada não sincronizada inicialmente
       });
 
@@ -59,13 +59,13 @@ export class EntryService {
     
     return entries.map(entry => ({
       id: entry.id,
-      product_code: entry.product_code,
-      product_name: entry.product_name,
+      productCode: entry.productCode,
+      productName: entry.productName,
       quantity: entry.quantity,
-      reason_id: entry.reason_id,
-      unit_cost: entry.unit_cost,
-      created_at: entry.created_at,
-      updated_at: entry.updated_at,
+      reasonId: entry.reasonId,
+      unitCost: entry.unitCost,
+      createdAt: entry.createdAt,
+      updatedAt: entry.updatedAt,
       synced: entry.synced,
     }));
   }
@@ -81,13 +81,13 @@ export class EntryService {
     
     return unsyncedEntries.map(entry => ({
       id: entry.id,
-      product_code: entry.product_code,
-      product_name: entry.product_name,
+      productCode: entry.productCode,
+      productName: entry.productName,
       quantity: entry.quantity,
-      reason_id: entry.reason_id,
-      unit_cost: entry.unit_cost,
-      created_at: entry.created_at,
-      updated_at: entry.updated_at,
+      reasonId: entry.reasonId,
+      unitCost: entry.unitCost,
+      createdAt: entry.createdAt,
+      updatedAt: entry.updatedAt,
       synced: entry.synced,
     }));
   }
@@ -104,7 +104,7 @@ export class EntryService {
       
       return await entry.update(entry => {
         entry.synced = true;
-        entry.updated_at = new Date();
+        entry.updatedAt = new Date();
       });
     });
   }
@@ -134,13 +134,13 @@ export class EntryService {
       
       return {
         id: entry.id,
-        product_code: entry.product_code,
-        product_name: entry.product_name,
+        productCode: entry.productCode,
+        productName: entry.productName,
         quantity: entry.quantity,
-        reason_id: entry.reason_id,
-        unit_cost: entry.unit_cost,
-        created_at: entry.created_at,
-        updated_at: entry.updated_at,
+        reasonId: entry.reasonId,
+        unitCost: entry.unitCost,
+        createdAt: entry.createdAt,
+        updatedAt: entry.updatedAt,
         synced: entry.synced,
       };
     } catch (error) {
