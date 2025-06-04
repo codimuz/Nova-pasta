@@ -6,6 +6,7 @@ import {
   Alert,
   Platform,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { useProductSearch } from '../components/ProductAutocompleteInput';
 import {
   Appbar,
@@ -49,6 +50,9 @@ import ProductSearchInput from '../components/ProductAutocompleteInput/ProductSe
  * - Gerenciamento otimizado de estado e cache
  */
 const HomeScreen = () => {
+  // Hook de navegação
+  const navigation = useNavigation();
+  
   // Estados do formulário
   const [reasons, setReasons] = useState([]);
   
@@ -320,12 +324,8 @@ const HomeScreen = () => {
    * TODO: Implementar navegação para menu lateral
    */
   const handleMenuPress = useCallback(() => {
-    Alert.alert(
-      'Menu',
-      'Menu lateral será implementado em breve.',
-      [{ text: 'OK' }]
-    );
-  }, []);
+    navigation.openDrawer();
+  }, [navigation]);
 
   /**
    * Manipula a atualização dos dados
