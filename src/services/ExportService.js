@@ -4,12 +4,21 @@
  */
 
 import * as FileSystem from 'expo-file-system';
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import { ReasonService } from './ReasonService.js';
 import { EntryService } from './EntryService.js';
 import { productService } from './ProductService.js';
 
 class ExportService {
+  /**
+   * Formata o código do produto para ter exatamente 13 caracteres
+   * @param {string} code - Código do produto
+   * @returns {string} - Código formatado com zeros à esquerda
+   */
+  formatProductCode(code) {
+    return code.toString().padStart(13, '0');
+  }
+
   /**
    * Consolida entradas por código de produto, somando as quantidades
    * @param {Array} entries - Lista de entradas a serem consolidadas
@@ -38,40 +47,15 @@ class ExportService {
 
   /**
    * Formata a quantidade baseado no tipo de unidade do produto
-   * KG: permite frações (ex: 1.750)
-   * UN: sempre inteiro arredondado para baixo (ex: 1.000)
    * @param {number} quantity - Quantidade a ser formatada
-   * @param {string} product_code - Código do produto para determinar o unit_type
-   * @returns {string|null} - Quantidade formatada ou null se erro
+   * @param {string} unitType - Tipo de unidade (KG ou UN)
+   * @returns {string} - Quantidade formatada com 3 casas decimais
    */
-  async formatQuantity(quantity, product_code) {
-    try {
-      const product = await productService.getProductByCode(product_code);
-      if (!product) throw new Error(`Produto não encontrado: ${product_code}`);
-      
-      const isKG = product.unit_type === 'KG';
-      let formattedQuantity = quantity;
-      
-      if (!isKG) {
-        // Para UN, arredondar para baixo
-        formattedQuantity = Math.floor(quantity);
-      }
-      
-      // Formatar com 3 casas decimais usando ponto
-      return formattedQuantity.toFixed(3);
-    } catch (error) {
-      console.error(`EXPORT_SERVICE: Erro ao formatar quantidade: ${error.message}`);
-      return null;
+  formatQuantity(quantity, unitType) {
+    if (unitType === 'UN') {
+      quantity = Math.floor(quantity);
     }
-  }
-
-  /**
-   * Formata o código do produto para ter exatamente 13 caracteres
-   * @param {string} code - Código do produto
-   * @returns {string} - Código formatado com zeros à esquerda
-   */
-  formatProductCode(code) {
-    return String(code).padStart(13, '0');
+    return quantity.toFixed(3);
   }
 
   /**
@@ -80,20 +64,48 @@ class ExportService {
   async exportData() {
     console.log('EXPORT_SERVICE: Iniciando exportação de dados...');
     
+    let baseDirectoryUri = null;
+
+    if (Platform.OS === 'android') {
+      try {
+        const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
+        if (permissions.granted) {
+          baseDirectoryUri = permissions.directoryUri;
+          console.log('EXPORT_SERVICE: Diretório de destino escolhido:', baseDirectoryUri);
+        } else {
+          Alert.alert('Permissão Negada', 'Não é possível exportar sem permissão para acessar o diretório.');
+          return {
+            totalReasons: 0,
+            successfulExports: 0,
+            failedExports: 0,
+            exportedFiles: [],
+            errors: [{ reason: 'N/A', error: 'Permissão de diretório negada.' }]
+          };
+        }
+      } catch (err) {
+        console.error('EXPORT_SERVICE: Erro ao solicitar permissões de diretório:', err);
+        Alert.alert('Erro de Permissão', `Não foi possível solicitar permissão para o diretório de exportação: ${err.message}`);
+        return {
+          totalReasons: 0,
+          successfulExports: 0,
+          failedExports: 0,
+          exportedFiles: [],
+          errors: [{ reason: 'N/A', error: `Falha na permissão do diretório: ${err.message}` }]
+        };
+      }
+    }
+
     try {
-      // Buscar todos os motivos cadastrados
       const reasons = await ReasonService.getAllReasons();
-      
       if (!reasons || reasons.length === 0) {
         throw new Error('Nenhum motivo encontrado no banco de dados');
       }
-      
       console.log(`EXPORT_SERVICE: ${reasons.length} motivos encontrados`);
-      
-      // Criar estrutura de diretórios base
-      await this.createBaseDirectories();
-      
-      // Processar cada motivo independentemente
+
+      if (!baseDirectoryUri) {
+        await this.createBaseDirectories();
+      }
+
       const results = {
         totalReasons: reasons.length,
         successfulExports: 0,
@@ -101,10 +113,10 @@ class ExportService {
         exportedFiles: [],
         errors: []
       };
-      
+
       for (const reason of reasons) {
         try {
-          const exported = await this.exportReasonData(reason);
+          const exported = await this.exportReasonData(reason, baseDirectoryUri);
           if (exported) {
             results.successfulExports++;
             results.exportedFiles.push(exported);
@@ -118,12 +130,10 @@ class ExportService {
           });
         }
       }
-      
-      // Exibir resultado final
+
       this.showExportResults(results);
-      
       return results;
-      
+
     } catch (error) {
       console.error('EXPORT_SERVICE: Erro na exportação:', error);
       Alert.alert(
@@ -169,11 +179,10 @@ class ExportService {
   /**
    * Exportar dados de um motivo específico
    */
-  async exportReasonData(reason) {
+  async exportReasonData(reason, baseDirectoryUri = null) {
     try {
       console.log(`EXPORT_SERVICE: Processando motivo ${reason.code} - ${reason.description}`);
       
-      // Buscar entradas não sincronizadas para este motivo
       const allEntries = await EntryService.getUnsyncedEntries();
       const entries = allEntries.filter(entry => entry.reason_id === reason.id);
       
@@ -184,33 +193,35 @@ class ExportService {
       
       console.log(`EXPORT_SERVICE: ${entries.length} entradas encontradas para motivo ${reason.code}`);
       
-      // Consolidar entradas por produto
       const consolidatedEntries = await this.consolidateEntries(entries);
       console.log(`EXPORT_SERVICE: ${consolidatedEntries.length} produtos únicos após consolidação`);
       
-      // Criar diretório específico do motivo
-      const reasonDir = await this.createReasonDirectory(reason.code);
-      
-      // Gerar nome do arquivo com data e hora
       const fileName = this.generateFileName(reason.code);
-      const filePath = `${reasonDir}${fileName}`;
+      const fileContent = await this.generateFileContent(consolidatedEntries);
       
-      // Gerar conteúdo do arquivo com validações
-      const { content: fileContent, validCount, errors } = await this.generateFileContent(consolidatedEntries);
-      
-      if (validCount === 0) {
-        console.log(`EXPORT_SERVICE: Nenhuma entrada válida para exportar no motivo ${reason.code}`);
-        return null;
+      let finalFilePathForLog = '';
+
+      if (Platform.OS === 'android' && baseDirectoryUri) {
+        const fileUri = await FileSystem.StorageAccessFramework.createFileAsync(
+          baseDirectoryUri,
+          fileName,
+          'text/plain'
+        );
+        await FileSystem.writeAsStringAsync(fileUri, fileContent, {
+          encoding: FileSystem.EncodingType.UTF8
+        });
+        finalFilePathForLog = fileUri;
+      } else {
+        const reasonDir = await this.createReasonDirectory(reason.code);
+        const filePath = `${reasonDir}${fileName}`;
+        await FileSystem.writeAsStringAsync(filePath, fileContent, {
+          encoding: FileSystem.EncodingType.UTF8
+        });
+        finalFilePathForLog = filePath;
       }
       
-      // Salvar arquivo
-      await FileSystem.writeAsStringAsync(filePath, fileContent, {
-        encoding: FileSystem.EncodingType.UTF8
-      });
+      console.log(`EXPORT_SERVICE: Arquivo criado: ${finalFilePathForLog}`);
       
-      console.log(`EXPORT_SERVICE: Arquivo criado: ${filePath}`);
-      
-      // Marcar entradas como sincronizadas apenas após sucesso na gravação
       for (const entry of entries) {
         try {
           await EntryService.markAsSynced(entry.id);
@@ -221,11 +232,9 @@ class ExportService {
       
       return {
         reason: reason.code,
-        fileName: fileName,
-        filePath: filePath,
-        entriesCount: validCount,
-        errorsCount: errors.length,
-        errors: errors
+        fileName,
+        filePath: finalFilePathForLog,
+        entriesCount: consolidatedEntries.length
       };
       
     } catch (error) {
@@ -281,41 +290,52 @@ class ExportService {
    * com validações e formatações necessárias
    */
   async generateFileContent(entries) {
-    const validEntries = [];
+    console.log('EXPORT_SERVICE: Gerando conteúdo do arquivo com', entries.length, 'entradas');
+    const lines = [];
     const errors = [];
     
     for (const entry of entries) {
       try {
-        // Formatar e validar código do produto
+        console.log('EXPORT_SERVICE: Processando entrada:', entry);
+        
+        if (!entry.product_code || !entry.quantity) {
+          console.error('EXPORT_SERVICE: Entrada inválida:', entry);
+          errors.push(`Entrada inválida: código ou quantidade ausente`);
+          continue;
+        }
+
+        const product = await productService.getProductByCode(entry.product_code);
+        if (!product) {
+          console.error(`EXPORT_SERVICE: Produto não encontrado: ${entry.product_code}`);
+          errors.push(`Produto não encontrado: ${entry.product_code}`);
+          continue;
+        }
+
+        console.log('EXPORT_SERVICE: Produto encontrado:', product);
+
         const formattedCode = this.formatProductCode(entry.product_code);
-        if (!/^\d{13}$/.test(formattedCode)) {
-          errors.push(`Código inválido: ${entry.product_code}`);
-          continue;
-        }
-        
-        // Formatar e validar quantidade
-        const formattedQuantity = await this.formatQuantity(entry.quantity, entry.product_code);
-        if (formattedQuantity === null || parseFloat(formattedQuantity) <= 0) {
-          errors.push(`Quantidade inválida para produto ${entry.product_code}: ${entry.quantity}`);
-          continue;
-        }
-        
-        validEntries.push(`Inventario ${formattedCode} ${formattedQuantity}`);
+        const formattedQuantity = this.formatQuantity(entry.quantity, product.unitType);
+
+        const line = `Inventario ${formattedCode} ${formattedQuantity}`;
+        console.log('EXPORT_SERVICE: Linha gerada:', line);
+        lines.push(line);
       } catch (error) {
-        errors.push(`Erro ao processar produto ${entry.product_code}: ${error.message}`);
+        console.error(`EXPORT_SERVICE: Erro ao processar entrada:`, error);
+        errors.push(`Erro ao processar entrada: ${error.message}`);
       }
     }
     
     if (errors.length > 0) {
-      console.warn('EXPORT_SERVICE: Avisos na geração do conteúdo:', errors);
+      console.warn('EXPORT_SERVICE: Erros durante geração do conteúdo:', errors);
+    }
+
+    console.log('EXPORT_SERVICE: Conteúdo gerado com', lines.length, 'linhas válidas');
+    
+    if (lines.length === 0) {
+      throw new Error('Nenhuma linha válida gerada para o arquivo');
     }
     
-    // Adicionar quebra de linha no final
-    return {
-      content: validEntries.join('\n') + '\n',
-      validCount: validEntries.length,
-      errors: errors
-    };
+    return lines.join('\n') + '\n';
   }
   
   /**
@@ -366,7 +386,11 @@ class ExportService {
       });
     }
     
-    message += `\nArquivos salvos em: Documentos/inventario/motivos/`;
+    if (Platform.OS === 'android') {
+      message += `\nArquivos salvos no diretório selecionado`;
+    } else {
+      message += `\nArquivos salvos em: Documentos/inventario/motivos/`;
+    }
     
     Alert.alert(
       successfulExports > 0 ? 'Exportação Realizada' : 'Exportação com Problemas',
@@ -375,82 +399,6 @@ class ExportService {
     );
   }
   
-  /**
-   * Verificar estrutura de diretórios existente
-   */
-  async checkExistingStructure() {
-    try {
-      const documentsDir = FileSystem.documentDirectory;
-      const baseDir = `${documentsDir}inventario/`;
-      const motivosDir = `${baseDir}motivos/`;
-      
-      const baseDirInfo = await FileSystem.getInfoAsync(baseDir);
-      const motivosDirInfo = await FileSystem.getInfoAsync(motivosDir);
-      
-      return {
-        baseExists: baseDirInfo.exists,
-        motivosExists: motivosDirInfo.exists,
-        basePath: baseDir,
-        motivosPath: motivosDir
-      };
-      
-    } catch (error) {
-      console.error('EXPORT_SERVICE: Erro ao verificar estrutura:', error);
-      return {
-        baseExists: false,
-        motivosExists: false,
-        error: error.message
-      };
-    }
-  }
-  
-  /**
-   * Listar arquivos já exportados
-   */
-  async listExportedFiles() {
-    try {
-      const documentsDir = FileSystem.documentDirectory;
-      const motivosDir = `${documentsDir}inventario/motivos/`;
-      
-      const motivosDirInfo = await FileSystem.getInfoAsync(motivosDir);
-      if (!motivosDirInfo.exists) {
-        return [];
-      }
-      
-      const motivosDirContents = await FileSystem.readDirectoryAsync(motivosDir);
-      const files = [];
-      
-      for (const motiveFolder of motivosDirContents) {
-        const motiveFolderPath = `${motivosDir}${motiveFolder}/`;
-        const motiveFolderInfo = await FileSystem.getInfoAsync(motiveFolderPath);
-        
-        if (motiveFolderInfo.exists && motiveFolderInfo.isDirectory) {
-          const motiveFiles = await FileSystem.readDirectoryAsync(motiveFolderPath);
-          
-          for (const file of motiveFiles) {
-            if (file.endsWith('.txt')) {
-              const filePath = `${motiveFolderPath}${file}`;
-              const fileInfo = await FileSystem.getInfoAsync(filePath);
-              
-              files.push({
-                motiveFolder,
-                fileName: file,
-                filePath,
-                size: fileInfo.size,
-                modificationTime: fileInfo.modificationTime
-              });
-            }
-          }
-        }
-      }
-      
-      return files.sort((a, b) => b.modificationTime - a.modificationTime);
-      
-    } catch (error) {
-      console.error('EXPORT_SERVICE: Erro ao listar arquivos:', error);
-      return [];
-    }
-  }
 }
 
 // Exportar instância singleton
