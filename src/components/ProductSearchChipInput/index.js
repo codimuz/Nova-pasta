@@ -1,6 +1,7 @@
-import React, { useState, useRef } from 'react';
-import { View, StyleSheet, TouchableOpacity, Text, ScrollView } from 'react-native';
-import { TextInput, Chip, ActivityIndicator, useTheme } from 'react-native-paper';
+import React, { useState, useRef, useCallback } from 'react';
+import { View, StyleSheet, TouchableOpacity, Text, FlatList } from 'react-native';
+import { TextInput, Chip, ActivityIndicator, useTheme, Portal } from 'react-native-paper';
+import ProductItem from './ProductItem';
 
 // Dados mockados para teste
 const MOCK_PRODUCTS = [
@@ -85,13 +86,26 @@ const ProductSearchChipInput = ({
   };
 
   // Selecionar produto
-  const handleProductSelect = (product) => {
+  const handleProductSelect = useCallback((product) => {
     onProductSelect?.(product);
     setSearchText('');
     setSearchResults([]);
     setIsDropdownVisible(false);
     inputRef.current?.blur();
-  };
+  }, [onProductSelect]);
+
+  // Renderizar item do dropdown
+  const renderProductItem = useCallback(({ item, index }) => (
+    <ProductItem
+      item={item}
+      index={index}
+      onPress={handleProductSelect}
+      isLast={index === searchResults.length - 1}
+    />
+  ), [handleProductSelect, searchResults.length]);
+
+  // Key extractor para FlatList
+  const keyExtractor = useCallback((item) => item.id.toString(), []);
 
   // Remover produto selecionado
   const handleRemoveProduct = () => {
@@ -142,66 +156,46 @@ const ProductSearchChipInput = ({
       
       {selectedProduct && renderSelectedProductChip()}
       
-      {/* Dropdown de resultados */}
-      {isDropdownVisible && searchResults.length > 0 && !selectedProduct && (
-        <View style={[styles.dropdown, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outline }]}>
-          <View style={[styles.dropdownHeader, { backgroundColor: theme.colors.primaryContainer }]}>
-            <Text style={[styles.dropdownHeaderText, { color: theme.colors.onPrimaryContainer }]}>
-              {searchResults.length} produto{searchResults.length > 1 ? 's' : ''} encontrado{searchResults.length > 1 ? 's' : ''}
-            </Text>
-          </View>
-          
-          <ScrollView 
-            style={styles.dropdownScroll}
-            nestedScrollEnabled={true}
-            showsVerticalScrollIndicator={true}
-          >
-            {searchResults.map((item, index) => (
-              <TouchableOpacity
-                key={item.id}
-                onPress={() => handleProductSelect(item)}
-                style={[
-                  styles.dropdownItem,
-                  { backgroundColor: theme.colors.surface },
-                  index !== searchResults.length - 1 && { 
-                    borderBottomColor: theme.colors.outline, 
-                    borderBottomWidth: 0.5 
-                  }
-                ]}
-              >
-                <View style={styles.productInfo}>
-                  <View style={styles.productHeader}>
-                    <Text style={[styles.productName, { color: theme.colors.onSurface }]} numberOfLines={1}>
-                      {item.productName}
-                    </Text>
-                    <View style={[styles.priceContainer, { backgroundColor: theme.colors.secondaryContainer }]}>
-                      <Text style={[styles.priceText, { color: theme.colors.onSecondaryContainer }]}>
-                        R$ {item.regularPrice.toFixed(2)}
-                      </Text>
-                    </View>
-                  </View>
-                  
-                  <View style={styles.productDetails}>
-                    <View style={styles.codeContainer}>
-                      <Text style={[styles.codeLabel, { color: theme.colors.onSurfaceVariant }]}>
-                        Código:
-                      </Text>
-                      <Text style={[styles.codeText, { color: theme.colors.onSurfaceVariant }]}>
-                        {item.productCode}
-                      </Text>
-                    </View>
-                    <View style={[styles.unitTypeContainer, { backgroundColor: theme.colors.tertiaryContainer }]}>
-                      <Text style={[styles.unitTypeText, { color: theme.colors.onTertiaryContainer }]}>
-                        {item.unitType}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-      )}
+      {/* Portal para dropdown isolado */}
+      <Portal>
+        {isDropdownVisible && searchResults.length > 0 && !selectedProduct && (
+          <>
+            {/* Overlay para fechar dropdown */}
+            <TouchableOpacity
+              style={styles.overlay}
+              activeOpacity={1}
+              onPress={() => setIsDropdownVisible(false)}
+            />
+            
+            {/* Dropdown com FlatList */}
+            <View style={[styles.dropdown, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outline }]}>
+              <View style={[styles.dropdownHeader, { backgroundColor: theme.colors.primaryContainer }]}>
+                <Text style={[styles.dropdownHeaderText, { color: theme.colors.onPrimaryContainer }]}>
+                  {searchResults.length} produto{searchResults.length > 1 ? 's' : ''} encontrado{searchResults.length > 1 ? 's' : ''}
+                </Text>
+              </View>
+              
+              <FlatList
+                data={searchResults}
+                keyExtractor={keyExtractor}
+                renderItem={renderProductItem}
+                showsVerticalScrollIndicator={true}
+                keyboardShouldPersistTaps="always"
+                removeClippedSubviews={true}
+                maxToRenderPerBatch={10}
+                windowSize={10}
+                initialNumToRender={5}
+                style={styles.dropdownList}
+                getItemLayout={(data, index) => ({
+                  length: 70,
+                  offset: 70 * index,
+                  index,
+                })}
+              />
+            </View>
+          </>
+        )}
+      </Portal>
     </View>
   );
 };
@@ -220,11 +214,11 @@ const styles = StyleSheet.create({
   },
   dropdown: {
     position: 'absolute',
-    top: 68,
-    left: 0,
-    right: 0,
+    top: 240,
+    left: 15,
+    right: 15,
     maxHeight: 300,
-    zIndex: 1000,
+    zIndex: 999,
     elevation: 8,
     shadowColor: '#000',
     shadowOffset: {
@@ -236,7 +230,16 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
   },
-  dropdownScroll: {
+  overlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'transparent',
+    zIndex: 998,
+  },
+  dropdownList: {
     maxHeight: 240,
   },
   dropdownHeader: {
@@ -250,63 +253,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-  },
-  dropdownItem: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-  },
-  productInfo: {
-    flex: 1,
-  },
-  productHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  productName: {
-    fontSize: 16,
-    fontWeight: '500',
-    flex: 1,
-    marginRight: 8,
-  },
-  priceContainer: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 12,
-  },
-  priceText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  productDetails: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  codeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  codeLabel: {
-    fontSize: 12,
-    marginRight: 4,
-  },
-  codeText: {
-    fontSize: 12,
-    fontFamily: 'monospace',
-  },
-  unitTypeContainer: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 8,
-    minWidth: 30,
-    alignItems: 'center',
-  },
-  unitTypeText: {
-    fontSize: 11,
-    fontWeight: '600',
   },
 });
 

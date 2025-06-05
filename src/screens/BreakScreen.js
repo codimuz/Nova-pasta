@@ -187,11 +187,12 @@ export default function BreakScreen() {
         <ThemeToggle />
       </Appbar.Header>
       <ScrollView
-        style={{ flex: 1 }}
-        nestedScrollEnabled={true}
-        keyboardShouldPersistTaps="always"
-        showsVerticalScrollIndicator
+        style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={true}
+        bounces={true}
+        scrollEventThrottle={16}
       >
         <View style={styles.formWrapper}>
           {/* Seção de Motivo */}
@@ -281,12 +282,15 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  scrollView: {
+    flex: 1,
+  },
   scrollContent: {
     flexGrow: 1,
+    paddingBottom: 20,
   },
   formWrapper: {
     padding: 16,
-    zIndex: 1,
   },
   input: {
     marginVertical: 12,
