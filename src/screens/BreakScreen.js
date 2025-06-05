@@ -654,14 +654,14 @@ const styles = StyleSheet.create({
   searchContainer: {
     position: 'relative',
     marginBottom: 12,
-    zIndex: 1000,
+    zIndex: 1001, // Ligeiramente maior que o ProductSearchInput para evitar conflitos
     minHeight: 56,
     ...Platform.select({
       ios: {
-        zIndex: 1000,
+        zIndex: 1001,
       },
       android: {
-        elevation: 1000,
+        elevation: 1001,
       },
     }),
   },

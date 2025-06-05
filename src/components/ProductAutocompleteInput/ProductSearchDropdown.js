@@ -54,6 +54,9 @@ const ProductSearchDropdown = memo(({
   const calculateOptimalHeight = useMemo(() => {
     // Se maxHeight foi fornecido explicitamente, usar ele
     if (maxHeight) {
+      if (__DEV__) {
+        console.log('ProductSearchDropdown: Usando maxHeight fornecido:', maxHeight);
+      }
       return maxHeight;
     }
 
@@ -64,7 +67,11 @@ const ProductSearchDropdown = memo(({
     
     // Se estiver carregando, erro ou sem resultados, usar altura mínima
     if (isSearching || searchError || noProductsFound || products.length === 0) {
-      return Math.min(minDropdownHeight, maxScreenHeight);
+      const calculatedHeight = Math.min(minDropdownHeight, maxScreenHeight);
+      if (__DEV__) {
+        console.log('ProductSearchDropdown: Altura para estado especial:', calculatedHeight);
+      }
+      return calculatedHeight;
     }
     
     // Calcular altura ideal baseada no número de produtos
@@ -77,6 +84,18 @@ const ProductSearchDropdown = memo(({
       Math.min(idealHeight, maxScreenHeight),
       minDropdownHeight
     );
+    
+    if (__DEV__) {
+      console.log('ProductSearchDropdown: Cálculo de altura:', {
+        products: products.length,
+        screenHeight,
+        maxScreenHeight,
+        maxVisibleItems,
+        visibleItems,
+        idealHeight,
+        finalHeight,
+      });
+    }
     
     return finalHeight;
   }, [products.length, screenHeight, maxHeight, isSearching, searchError, noProductsFound]);
@@ -416,19 +435,19 @@ const styles = StyleSheet.create({
     top: '100%',
     left: 0,
     right: 0,
-    zIndex: 999999,
-    elevation: 999999, // Para Android
+    zIndex: 10000, // Muito maior que o ProductSearchInput (1000)
+    elevation: 10000, // Para Android
     marginTop: 4,
     minHeight: ITEM_HEIGHT * 2, // Mínimo 2 itens
     // Garante que o dropdown fique sobre TODOS os elementos
     ...Platform.select({
       ios: {
-        // iOS precisa de um z-index extremamente alto
-        zIndex: 999999,
+        // iOS precisa de um z-index maior que o input
+        zIndex: 10000,
       },
       android: {
         // Android precisa de elevation muito alta
-        elevation: 999999,
+        elevation: 10000,
       },
     }),
   },

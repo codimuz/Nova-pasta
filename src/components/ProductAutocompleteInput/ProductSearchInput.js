@@ -295,26 +295,26 @@ ProductSearchInput.displayName = 'ProductSearchInput';
 const styles = StyleSheet.create({
   container: {
     position: 'relative',
-    zIndex: 99999, // Base z-index muito alto para o container
+    zIndex: 1000, // Simplificado - base z-index para o container
     ...Platform.select({
       ios: {
-        zIndex: 99999,
+        zIndex: 1000,
       },
       android: {
-        elevation: 99999,
+        elevation: 1000,
       },
     }),
   },
   chipContainer: {
     marginBottom: 12,
     position: 'relative',
-    zIndex: 99998, // Mantém hierarquia com o container
+    zIndex: 999, // Chip fica abaixo do container
     ...Platform.select({
       ios: {
-        zIndex: 99998,
+        zIndex: 999,
       },
       android: {
-        elevation: 99998,
+        elevation: 999,
       },
     }),
   },
@@ -324,13 +324,13 @@ const styles = StyleSheet.create({
   },
   searchContainer: {
     position: 'relative',
-    zIndex: 99997, // Container de busca mantém hierarquia
+    zIndex: 998, // Container de busca fica abaixo ainda
     ...Platform.select({
       ios: {
-        zIndex: 99997,
+        zIndex: 998,
       },
       android: {
-        elevation: 99997,
+        elevation: 998,
       },
     }),
   },
