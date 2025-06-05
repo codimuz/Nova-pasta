@@ -338,8 +338,22 @@ const ProductSearchDropdown = memo(({
     return null;
   }
 
+  if (__DEV__) {
+    console.log('ProductSearchDropdown: Renderizando dropdown com:', {
+      visible,
+      productsCount: products.length,
+      isSearching,
+      searchError,
+      noProductsFound,
+      calculatedHeight: calculateOptimalHeight
+    });
+  }
+
   return (
-    <View style={[styles.container, { height: calculateOptimalHeight }]}>
+    <View 
+      style={[styles.container, { height: calculateOptimalHeight }]}
+      pointerEvents="box-none" // Permite que toques passem através quando necessário
+    >
       <Surface
         elevation={8}
         style={[
@@ -350,6 +364,7 @@ const ProductSearchDropdown = memo(({
             flex: 1,
           }
         ]}
+        pointerEvents="auto" // Garante que a Surface capture eventos de toque
       >
         {/* Estados especiais: loading, erro, sem resultados */}
         {isSearching && (
@@ -376,11 +391,13 @@ const ProductSearchDropdown = memo(({
             data={products}
             renderItem={renderProductItem}
             keyExtractor={keyExtractor}
-            getItemLayout={getItemLayout}
+            // DESABILITADO TEMPORARIAMENTE getItemLayout para debug
+            // getItemLayout={getItemLayout}
             initialNumToRender={INITIAL_NUM_TO_RENDER}
             maxToRenderPerBatch={MAX_TO_RENDER_PER_BATCH}
             windowSize={WINDOW_SIZE}
-            removeClippedSubviews={true}
+            // DESABILITADO TEMPORARIAMENTE removeClippedSubviews para debug
+            removeClippedSubviews={false}
             showsVerticalScrollIndicator={true}
             keyboardShouldPersistTaps="handled"
             nestedScrollEnabled={true}
@@ -390,6 +407,9 @@ const ProductSearchDropdown = memo(({
             ItemSeparatorComponent={renderItemSeparator}
             style={styles.flatList}
             contentContainerStyle={styles.flatListContent}
+            // Propriedades específicas para garantir rolagem
+            scrollEnabled={true}
+            pagingEnabled={false}
             // Melhorias para experiência de rolagem
             scrollEventThrottle={16}
             decelerationRate="normal"
