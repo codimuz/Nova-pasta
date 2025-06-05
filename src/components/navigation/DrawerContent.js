@@ -77,6 +77,20 @@ const DrawerContent = (props) => {
               }
             }}
           />
+          {/* Nova Rota para Registrar Quebra */}
+          <Drawer.Item
+            label="Registrar Quebra"
+            icon="alert-circle-plus-outline"
+            active={isActiveRoute('BreakEntry')}
+            onPress={() => navigateToScreen('BreakEntry')}
+            theme={{
+              colors: {
+                primary: theme.colors.primary,
+                onSurface: theme.colors.onSurface,
+                onSurfaceVariant: theme.colors.onSurfaceVariant,
+              }
+            }}
+          />
           <Drawer.Item
             label="Relatórios"
             icon="chart-bar"

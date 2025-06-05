@@ -9,7 +9,8 @@ import { ProductsProvider } from './src/contexts/ProductsContext';
 import { initializeDatabase } from './src/database';
 
 // Import all screens
-import HomeScreen from './src/screens/HomeScreen';
+import HomeScreen from './src/screens/HomeScreen'; // O NOVO HomeScreen (Dashboard)
+import BreakScreen from './src/screens/BreakScreen'; // Tela para registrar quebras
 import ReportsScreen from './src/screens/ReportsScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
 import ProductsScreen from './src/screens/ProductsScreen';
@@ -37,6 +38,14 @@ const RootNavigator = () => {
         component={HomeScreen}
         options={{
           title: 'Início'
+        }}
+      />
+      {/* Nova rota para registrar quebras */}
+      <Drawer.Screen
+        name="BreakEntry"
+        component={BreakScreen}
+        options={{
+          title: 'Registrar Quebra'
         }}
       />
       <Drawer.Screen
