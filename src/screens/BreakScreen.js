@@ -1,18 +1,17 @@
-import { useMemo, useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, View, ViewStyle } from 'react-native';
 import {
   Appbar,
   Button,
   Divider,
   Headline,
-  MD3DarkTheme,
-  MD3LightTheme,
-  PaperProvider,
   Paragraph,
   TextInput,
-  ThemeProvider,
   TouchableRipple,
+  useTheme,
 } from 'react-native-paper';
+import { useNavigation } from '@react-navigation/native';
+import ThemeToggle from '../components/common/ThemeToggle';
 import {
   Dropdown,
   MultiSelectDropdown,
@@ -57,6 +56,7 @@ const CustomDropdownItem = ({
   onSelect,
   toggleMenu,
   isLast,
+  theme,
 }) => {
   const style = useMemo(
     () => ({
@@ -64,12 +64,12 @@ const CustomDropdownItem = ({
       width,
       backgroundColor:
         value === option.value
-          ? MD3DarkTheme.colors.primary
-          : MD3DarkTheme.colors.onPrimary,
+          ? theme.colors.primary
+          : theme.colors.surface,
       justifyContent: 'center',
       paddingHorizontal: 16,
     }),
-    [option.value, value, width]
+    [option.value, value, width, theme]
   );
 
   return (
@@ -85,8 +85,8 @@ const CustomDropdownItem = ({
           style={{
             color:
               value === option.value
-                ? MD3DarkTheme.colors.onPrimary
-                : MD3DarkTheme.colors.primary,
+                ? theme.colors.onPrimary
+                : theme.colors.onSurface,
           }}
         >
           {option.label}
@@ -101,160 +101,82 @@ const CustomDropdownInput = ({
   placeholder,
   selectedLabel,
   rightIcon,
+  theme,
 }) => {
   return (
     <TextInput
       mode="outlined"
       placeholder={placeholder}
-      placeholderTextColor={MD3DarkTheme.colors.onSecondary}
+      placeholderTextColor={theme.colors.onSurfaceVariant}
       value={selectedLabel}
       style={{
-        backgroundColor: MD3DarkTheme.colors.primary,
+        backgroundColor: theme.colors.surface,
       }}
-      textColor={MD3DarkTheme.colors.onPrimary}
+      textColor={theme.colors.onSurface}
       right={rightIcon}
     />
   );
 };
 
 export default function BreakScreen() {
-  const [nightMode, setNightmode] = useState(false);
+  const navigation = useNavigation();
+  const theme = useTheme();
   const [gender, setGender] = useState();
   const [colors, setColors] = useState([]);
   const refDropdown1 = useRef(null);
-  const Theme = nightMode ? MD3DarkTheme : MD3LightTheme;
 
   return (
-    <ThemeProvider theme={Theme}>
-      <PaperProvider theme={Theme}>
-        <View
-          style={[
-            styles.container,
-            { backgroundColor: Theme.colors.background },
-          ]}
-        >
-          <Appbar.Header elevated>
-            <Appbar.Content title={'Dropdown Demo'} />
-            <Appbar.Action
-              icon={nightMode ? 'brightness-7' : 'brightness-3'}
-              onPress={() => setNightmode(!nightMode)}
-            />
-          </Appbar.Header>
-          <ScrollView
-            showsVerticalScrollIndicator
-            keyboardShouldPersistTaps={'handled'}
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <Appbar.Header>
+        <Appbar.Action icon="menu" onPress={() => navigation.openDrawer()} />
+        <Appbar.Content title="Registrar Quebra" />
+        <ThemeToggle />
+      </Appbar.Header>
+      <ScrollView
+        showsVerticalScrollIndicator
+        keyboardShouldPersistTaps={'handled'}
+      >
+        <View style={styles.formWrapper}>
+          <Paragraph>Selecione um Motivo</Paragraph>
+          <Dropdown
+            ref={refDropdown1}
+            label={'Motivos'}
+            placeholder="Selecione um Motivo"
+            options={OPTIONS}
+            value={gender}
+            onSelect={setGender}
+          />
+          <View style={styles.spacer} />
+
+          <TextInput
+            label="Buscar Produtos"
+            mode="outlined"
+            placeholder=""
+          />
+
+          <View style={styles.spacer} />
+          <TextInput
+            label="Quantidade"
+            mode="outlined"
+            placeholder=""
+          />
+          <View style={styles.spacer} />
+          <Button
+            mode={'contained'}
+            onPress={() => {
+              setGender(undefined);
+            }}
           >
-            <View style={styles.formWrapper}>
-              <Headline>Single Select</Headline>
-              <View style={styles.spacer} />
-              <Paragraph>Default Dropdown</Paragraph>
-              <Dropdown
-                ref={refDropdown1}
-                label={'Gender'}
-                placeholder="Select Gender"
-                options={OPTIONS}
-                value={gender}
-                onSelect={setGender}
-              />
-              <View style={styles.spacer} />
-              <Paragraph>Default Dropdown (Outline Mode)</Paragraph>
-              <Dropdown
-                label={'Gender'}
-                placeholder="Select Gender"
-                options={OPTIONS}
-                value={gender}
-                onSelect={setGender}
-                mode="outlined"
-              />
-              <View style={styles.spacer} />
-              <Paragraph>Custom Dropdown</Paragraph>
-              <Dropdown
-                label={'Gender'}
-                placeholder="Select Gender"
-                options={OPTIONS}
-                value={gender}
-                onSelect={setGender}
-                menuContentStyle={{
-                  backgroundColor: MD3DarkTheme.colors.onPrimary,
-                }}
-                menuUpIcon={
-                  <TextInput.Icon
-                    icon={'menu-up'}
-                    color={MD3DarkTheme.colors.primaryContainer}
-                    pointerEvents="none"
-                  />
-                }
-                menuDownIcon={
-                  <TextInput.Icon
-                    icon={'menu-down'}
-                    color={MD3DarkTheme.colors.primaryContainer}
-                    pointerEvents="none"
-                  />
-                }
-                CustomDropdownItem={CustomDropdownItem}
-                CustomDropdownInput={CustomDropdownInput}
-              />
+            Salvar
+          </Button>
 
-              <View style={styles.spacer} />
-              <View style={styles.spacer} />
+          <View style={styles.spacer} />
 
-              <Headline>Multi Select</Headline>
-              <View style={styles.spacer} />
-              <Paragraph>Default Dropdown</Paragraph>
-              <MultiSelectDropdown
-                label={'Colors'}
-                placeholder="Select Colors"
-                options={MULTI_SELECT_OPTIONS}
-                value={colors}
-                onSelect={setColors}
-              />
-              <View style={styles.spacer} />
-              <Paragraph>Default Dropdown (Outline Mode)</Paragraph>
-              <MultiSelectDropdown
-                label={'Colors'}
-                placeholder="Select Colors"
-                options={MULTI_SELECT_OPTIONS}
-                value={colors}
-                onSelect={setColors}
-                mode={'outlined'}
-              />
 
-              <View style={styles.spacer} />
-              <View style={styles.spacer} />
 
-              <Headline>Reset</Headline>
-              <View style={styles.spacer} />
-              <Button
-                mode={'contained'}
-                onPress={() => {
-                  setGender(undefined);
-                }}
-              >
-                Reset
-              </Button>
-
-              <View style={styles.spacer} />
-
-              <Headline>References</Headline>
-              <View style={styles.spacer} />
-              <Button
-                mode={'contained'}
-                onPress={() => refDropdown1.current?.focus()}
-              >
-                Focus
-              </Button>
-              <View style={styles.spacer} />
-              <Button
-                mode={'contained'}
-                onPress={() => refDropdown1.current?.blur()}
-              >
-                Blur
-              </Button>
-            </View>
-          </ScrollView>
         </View>
-      </PaperProvider>
-    </ThemeProvider>
+      </ScrollView>
+    </View>
   );
 }
 
