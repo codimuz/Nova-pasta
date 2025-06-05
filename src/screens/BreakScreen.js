@@ -1,5 +1,6 @@
 import React, { useMemo, useRef, useState, useEffect } from 'react';
-import { ScrollView, StyleSheet, View, Text, Keyboard, TouchableOpacity, SafeAreaView } from 'react-native';
+import { StyleSheet, View, Text, Keyboard, TouchableOpacity, SafeAreaView } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import {
   Appbar,
   Button,
@@ -297,13 +298,14 @@ function BreakScreen() {
         <Appbar.Content title="Registrar Quebra" />
         <ThemeToggle />
       </Appbar.Header>
-      <ScrollView
+      <KeyboardAwareScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={true}
-        bounces={true}
-        scrollEventThrottle={16}
+        enableOnAndroid={true}
+        enableAutomaticScroll={true}
+        extraScrollHeight={20}
       >
         <View style={styles.formWrapper}>
           {/* Seção de Motivo */}
@@ -355,7 +357,7 @@ function BreakScreen() {
             Salvar
           </Button>
         </View>
-      </ScrollView>
+      </KeyboardAwareScrollView>
 
       {/* FAB Group */}
       <Portal>
