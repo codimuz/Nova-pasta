@@ -1,60 +1,67 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, StyleSheet } from 'react-native';
-import { Menu, TextInput, useTheme, Text } from 'react-native-paper';
+import { Menu, TextInput, useTheme, HelperText, ActivityIndicator } from 'react-native-paper';
 import { spacing } from '../../theme/spacing';
 import { ReasonService } from '../../services/ReasonService.js';
 
-const MotiveDropdown = ({ 
-  value, 
-  onValueChange, 
-  error, 
+const MotiveDropdown = ({
+  value,
+  onValueChange,
+  error,
   label = "Motivo da Quebra",
   placeholder = "Selecione o motivo",
   disabled = false,
-  ...props 
+  style,
+  ...props
 }) => {
   const [visible, setVisible] = useState(false);
   const [reasons, setReasons] = useState([]);
-  const [selectedReason, setSelectedReason] = useState(null);
+  const [selectedReasonDisplay, setSelectedReasonDisplay] = useState('');
   const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState(null);
+  
   const theme = useTheme();
   
-  useEffect(() => {
-    loadReasons();
-  }, []);
-  
-  useEffect(() => {
-    if (value && reasons.length > 0) {
-      const reason = reasons.find(r => r.id === value);
-      setSelectedReason(reason);
-    } else {
-      setSelectedReason(null);
-    }
-  }, [value, reasons]);
-  
-  const loadReasons = async () => {
+  const loadReasons = useCallback(async () => {
     try {
       setLoading(true);
+      setErrorMessage(null);
       const data = await ReasonService.getAllReasons();
-      // Mapear campos para manter compatibilidade com o código existente
-      const mappedData = data.map(reason => ({
-        reason_id: reason.id,
-        reason_name: reason.description,
-        code: reason.code,
-        ...reason
-      }));
-      setReasons(mappedData);
-    } catch (error) {
-      console.error('Erro ao carregar motivos:', error);
+      if (data && data.length > 0) {
+        setReasons(data);
+      } else {
+        setReasons([]);
+        setErrorMessage("Nenhum motivo cadastrado.");
+      }
+    } catch (err) {
+      console.error('MotiveDropdown: Erro ao carregar motivos:', err);
+      setErrorMessage('Falha ao carregar motivos.');
       setReasons([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadReasons();
+  }, [loadReasons]);
+  
+  useEffect(() => {
+    if (value && reasons.length > 0) {
+      const reason = reasons.find(r => r.id === value);
+      if (reason) {
+        setSelectedReasonDisplay(`${reason.code} – ${reason.description}`);
+      } else {
+        setSelectedReasonDisplay('');
+      }
+    } else {
+      setSelectedReasonDisplay('');
+    }
+  }, [value, reasons]);
   
   const handleSelect = (reason) => {
-    setSelectedReason(reason);
     onValueChange(reason.id);
+    setSelectedReasonDisplay(`${reason.code} – ${reason.description}`);
     setVisible(false);
   };
   
@@ -64,42 +71,47 @@ const MotiveDropdown = ({
     }
   };
   
+  const currentPlaceholder = loading ? "Carregando motivos..." : (reasons.length === 0 && errorMessage) ? "Nenhum motivo disponível" : placeholder;
+  
   return (
-    <View style={[styles.container, props.style]}>
+    <View style={[styles.container, style]}>
       <Menu
         visible={visible}
         onDismiss={() => setVisible(false)}
         anchor={
           <TextInput
             {...props}
-            value={selectedReason?.description || ''}
+            value={selectedReasonDisplay}
             onFocus={openDropdown}
             onPressIn={openDropdown}
             right={
-              <TextInput.Icon 
-                icon={loading ? "loading" : "chevron-down"} 
-                forceTextInputFocus={false}
+              <TextInput.Icon
+                icon={loading ? "loading" : (visible ? "menu-up" : "menu-down")}
                 onPress={openDropdown}
+                disabled={disabled || loading}
               />
             }
             editable={false}
-            error={error}
+            error={!!error || !!errorMessage}
             mode="outlined"
             label={label}
-            placeholder={placeholder}
+            placeholder={currentPlaceholder}
             disabled={disabled || loading}
             style={styles.input}
+            activeOutlineColor={theme.colors.primary}
+            outlineColor={theme.colors.outline}
           />
         }
         contentStyle={[
           styles.menu,
-          { backgroundColor: theme.colors.surface }
+          { backgroundColor: theme.colors.surfaceVariant }
         ]}
       >
-        {reasons.length === 0 ? (
+        {loading ? (
+          <ActivityIndicator animating={true} color={theme.colors.primary} style={styles.loader} />
+        ) : reasons.length === 0 ? (
           <Menu.Item
-            onPress={() => {}}
-            title="Nenhum motivo cadastrado"
+            title={errorMessage || "Nenhum motivo disponível"}
             titleStyle={[styles.emptyItem, { color: theme.colors.onSurfaceVariant }]}
             disabled
           />
@@ -108,15 +120,16 @@ const MotiveDropdown = ({
             <Menu.Item
               key={reason.id}
               onPress={() => handleSelect(reason)}
-              title={reason.description}
+              title={`${reason.code} – ${reason.description}`}
               titleStyle={[
                 styles.menuItem,
-                { color: theme.colors.onSurface }
+                { color: theme.colors.onSurfaceVariant },
+                value === reason.id && styles.selectedItem
               ]}
               style={[
                 styles.menuItemContainer,
-                selectedReason?.id === reason.id && {
-                  backgroundColor: theme.colors.primaryContainer
+                value === reason.id && {
+                  backgroundColor: theme.colors.primaryContainer,
                 }
               ]}
             />
@@ -124,14 +137,9 @@ const MotiveDropdown = ({
         )}
       </Menu>
       
-      {error && typeof error === 'string' && (
-        <Text 
-          variant="bodySmall" 
-          style={[styles.errorText, { color: theme.colors.error }]}
-        >
-          {error}
-        </Text>
-      )}
+      <HelperText type="error" visible={!!error || !!errorMessage}>
+        {error || errorMessage}
+      </HelperText>
     </View>
   );
 };
@@ -141,31 +149,32 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   input: {
-    backgroundColor: 'transparent',
+    // backgroundColor é gerenciado pelo tema do TextInput
   },
   menu: {
-    maxHeight: 240,
     marginTop: spacing.xs,
     borderRadius: spacing.borderRadius.sm,
-    elevation: 8,
+    elevation: 4,
   },
   menuItem: {
     fontSize: 16,
-    lineHeight: 24,
   },
   menuItemContainer: {
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
-    minHeight: 48, // Accessibility touch target
+    minHeight: 48,
+  },
+  selectedItem: {
+    fontWeight: 'bold',
   },
   emptyItem: {
     fontSize: 14,
     fontStyle: 'italic',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
   },
-  errorText: {
-    marginTop: spacing.xs,
-    marginLeft: spacing.md,
-    fontSize: 12,
+  loader: {
+    paddingVertical: spacing.md,
   },
 });
 
