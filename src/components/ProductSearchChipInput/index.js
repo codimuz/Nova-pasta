@@ -1,10 +1,19 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { View, StyleSheet, TouchableOpacity, Text, ScrollView } from 'react-native';
-import { TextInput, Chip, ActivityIndicator, useTheme, Modal, Portal } from 'react-native-paper';
-import { Q } from '@nozbe/watermelondb';
-import withObservables from '@nozbe/with-observables';
-import { database } from '../../database';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, StyleSheet, TouchableOpacity, Text, FlatList } from 'react-native';
+import { TextInput, Chip, Menu, List, ActivityIndicator, useTheme } from 'react-native-paper';
+import { ProductService } from '../../services/ProductService';
 
+// Dados mockados para teste
+const MOCK_PRODUCTS = [
+  { id: 1, productCode: '0000000001234', productName: 'Açúcar Cristal 1KG', regularPrice: 4.50, unitType: 'KG' },
+  { id: 2, productCode: '0000000005678', productName: 'Arroz Tipo 1 5KG', regularPrice: 22.90, unitType: 'KG' },
+  { id: 3, productCode: '0000000009012', productName: 'Feijão Preto 1KG', regularPrice: 8.75, unitType: 'KG' },
+  { id: 4, productCode: '0000000003456', productName: 'Leite Integral 1L', regularPrice: 5.20, unitType: 'UN' },
+  { id: 5, productCode: '0000000007890', productName: 'Óleo de Soja 900ml', regularPrice: 6.80, unitType: 'UN' },
+  { id: 6, productCode: '0000000004567', productName: 'Macarrão Espaguete 500g', regularPrice: 3.25, unitType: 'UN' },
+  { id: 7, productCode: '0000000008901', productName: 'Café Torrado Moído 500g', regularPrice: 12.90, unitType: 'UN' },
+  { id: 8, productCode: '0000000002345', productName: 'Farinha de Trigo 1KG', regularPrice: 4.20, unitType: 'KG' },
+];
 
 const ProductSearchChipInput = ({
   label = "Buscar Produtos",
@@ -17,52 +26,31 @@ const ProductSearchChipInput = ({
   ...props
 }) => {
   const theme = useTheme();
-  const productsCollection = useMemo(() => database.get('products'), []);
   const [searchText, setSearchText] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [isDropdownVisible, setIsDropdownVisible] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const inputRef = useRef(null);
   const searchTimeout = useRef(null);
-  const subscription = useRef(null);
 
-  useEffect(() => {
-    return () => {
-      if (subscription.current) {
-        subscription.current.unsubscribe();
-      }
-    };
-  }, []);
-
+  // Função de busca com dados mockados (pode ser substituída pela integração real)
   const searchProducts = async (term) => {
     if (!term || term.length < 2) {
       return [];
     }
 
-    const termLower = term.toLowerCase();
-    
-    try {
-      const query = productsCollection.query(
-        Q.or(
-          Q.where('product_name', Q.like(`%${Q.sanitizeLikeString(termLower)}%`)),
-          Q.where('product_code', Q.like(`%${Q.sanitizeLikeString(term)}%`))
-        ),
-        Q.where('deleted_at', null),
-        Q.take(5)
-      );
+    // Simular delay de API
+    await new Promise(resolve => setTimeout(resolve, 200));
 
-      if (subscription.current) {
-        subscription.current.unsubscribe();
-      }
+    const filteredProducts = MOCK_PRODUCTS.filter(product =>
+      product.productName.toLowerCase().includes(term.toLowerCase()) ||
+      product.productCode.includes(term)
+    ).slice(0, 5); // Limitar a 5 resultados
 
-      const results = await query.fetch();
-      return results;
-    } catch (error) {
-      console.error('Erro na busca de produtos:', error);
-      return [];
-    }
+    return filteredProducts;
   };
 
+  // Debounced search
   const handleSearch = async (text) => {
     setSearchText(text);
     
@@ -70,6 +58,7 @@ const ProductSearchChipInput = ({
       clearTimeout(searchTimeout.current);
     }
 
+    // Se tiver produto selecionado e começar a digitar, limpa a seleção
     if (selectedProduct && text) {
       onProductSelect?.(null);
     }
@@ -96,6 +85,7 @@ const ProductSearchChipInput = ({
     }, 300);
   };
 
+  // Selecionar produto
   const handleProductSelect = (product) => {
     onProductSelect?.(product);
     setSearchText('');
@@ -104,12 +94,14 @@ const ProductSearchChipInput = ({
     inputRef.current?.blur();
   };
 
+  // Remover produto selecionado
   const handleRemoveProduct = () => {
     onProductSelect?.(null);
     setSearchText('');
     inputRef.current?.focus();
   };
 
+  // Renderizar chip do produto selecionado
   const renderSelectedProductChip = () => {
     if (!selectedProduct) return null;
 
@@ -128,50 +120,6 @@ const ProductSearchChipInput = ({
       </View>
     );
   };
-
-  const renderProductItem = (product, index, totalItems) => (
-    <TouchableOpacity
-      key={product.id}
-      onPress={() => handleProductSelect(product)}
-      style={[
-        styles.dropdownItem,
-        { backgroundColor: theme.colors.surface },
-        index !== totalItems - 1 && {
-          borderBottomColor: theme.colors.outline,
-          borderBottomWidth: 0.5
-        }
-      ]}
-    >
-      <View style={styles.productInfo}>
-        <View style={styles.productHeader}>
-          <Text style={[styles.productName, { color: theme.colors.onSurface }]} numberOfLines={1}>
-            {product.productName}
-          </Text>
-          <View style={[styles.priceContainer, { backgroundColor: theme.colors.secondaryContainer }]}>
-            <Text style={[styles.priceText, { color: theme.colors.onSecondaryContainer }]}>
-              R$ {product.regularPrice.toFixed(2)}
-            </Text>
-          </View>
-        </View>
-        
-        <View style={styles.productDetails}>
-          <View style={styles.codeContainer}>
-            <Text style={[styles.codeLabel, { color: theme.colors.onSurfaceVariant }]}>
-              Código:
-            </Text>
-            <Text style={[styles.codeText, { color: theme.colors.onSurfaceVariant }]}>
-              {product.productCode}
-            </Text>
-          </View>
-          <View style={[styles.unitTypeContainer, { backgroundColor: theme.colors.tertiaryContainer }]}>
-            <Text style={[styles.unitTypeText, { color: theme.colors.onTertiaryContainer }]}>
-              {product.unitType}
-            </Text>
-          </View>
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
 
   return (
     <View style={styles.container}>
@@ -195,19 +143,9 @@ const ProductSearchChipInput = ({
       
       {selectedProduct && renderSelectedProductChip()}
       
-      <Portal>
-        <Modal
-          visible={isDropdownVisible && searchResults.length > 0 && !selectedProduct}
-          onDismiss={() => setIsDropdownVisible(false)}
-          style={styles.modalContainer}
-          contentContainerStyle={[
-            styles.dropdown,
-            {
-              backgroundColor: theme.colors.surface,
-              borderColor: theme.colors.outline
-            }
-          ]}
-        >
+      {/* Dropdown de resultados personalizado */}
+      {isDropdownVisible && searchResults.length > 0 && !selectedProduct && (
+        <View style={[styles.dropdown, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outline }]}>
           <View style={[styles.dropdownHeader, { backgroundColor: theme.colors.primaryContainer }]}>
             <Text style={[styles.dropdownHeaderText, { color: theme.colors.onPrimaryContainer }]}>
               {searchResults.length} produto{searchResults.length > 1 ? 's' : ''} encontrado{searchResults.length > 1 ? 's' : ''}
@@ -216,16 +154,53 @@ const ProductSearchChipInput = ({
           
           <ScrollView
             style={styles.dropdownScroll}
-            contentContainerStyle={styles.dropdownScrollContent}
             showsVerticalScrollIndicator={true}
             bounces={false}
+            nestedScrollEnabled={true}
           >
-            {searchResults.map((product, index) => 
-              renderProductItem(product, index, searchResults.length)
-            )}
+            {searchResults.map((product, index) => (
+              <TouchableOpacity
+                key={product.id}
+                onPress={() => handleProductSelect(product)}
+                style={[
+                  styles.dropdownItem,
+                  { backgroundColor: theme.colors.surface },
+                  index !== searchResults.length - 1 && { borderBottomColor: theme.colors.outline, borderBottomWidth: 0.5 }
+                ]}
+              >
+                <View style={styles.productInfo}>
+                  <View style={styles.productHeader}>
+                    <Text style={[styles.productName, { color: theme.colors.onSurface }]} numberOfLines={1}>
+                      {product.productName}
+                    </Text>
+                    <View style={[styles.priceContainer, { backgroundColor: theme.colors.secondaryContainer }]}>
+                      <Text style={[styles.priceText, { color: theme.colors.onSecondaryContainer }]}>
+                        R$ {product.regularPrice.toFixed(2)}
+                      </Text>
+                    </View>
+                  </View>
+                  
+                  <View style={styles.productDetails}>
+                    <View style={styles.codeContainer}>
+                      <Text style={[styles.codeLabel, { color: theme.colors.onSurfaceVariant }]}>
+                        Código:
+                      </Text>
+                      <Text style={[styles.codeText, { color: theme.colors.onSurfaceVariant }]}>
+                        {product.productCode}
+                      </Text>
+                    </View>
+                    <View style={[styles.unitTypeContainer, { backgroundColor: theme.colors.tertiaryContainer }]}>
+                      <Text style={[styles.unitTypeText, { color: theme.colors.onTertiaryContainer }]}>
+                        {product.unitType}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            ))}
           </ScrollView>
-        </Modal>
-      </Portal>
+        </View>
+      )}
     </View>
   );
 };
@@ -233,6 +208,7 @@ const ProductSearchChipInput = ({
 const styles = StyleSheet.create({
   container: {
     position: 'relative',
+    zIndex: 999,
   },
   input: {
     backgroundColor: 'transparent',
@@ -241,36 +217,26 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginBottom: 0,
   },
-  modalContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
   dropdown: {
     position: 'absolute',
-    left: 16,
-    right: 16,
-    top: 238,
+    top: 68, // Altura do TextInput
+    left: 0,
+    right: 0,
     maxHeight: 300,
-    borderRadius: 8,
-    borderWidth: 1,
-    overflow: 'hidden',
     elevation: 8,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 2,
+      height: 4,
     },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
+    shadowOpacity: 0.3,
+    shadowRadius: 4.65,
+    borderRadius: 8,
+    borderWidth: 1,
+    zIndex: 998,
   },
   dropdownScroll: {
-    maxHeight: 240,
-  },
-  dropdownScrollContent: {
-    paddingBottom: 4,
+    maxHeight: 240, // Altura máxima da área scrollável
   },
   dropdownHeader: {
     paddingVertical: 8,
@@ -342,9 +308,5 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
-
-const enhance = withObservables([], () => ({
-  // Você pode adicionar observables aqui se precisar
-}));
 
 export default ProductSearchChipInput;

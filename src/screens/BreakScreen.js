@@ -4,13 +4,13 @@ import {
   Appbar,
   Button,
   Divider,
-  TextInput,
   useTheme,
   ActivityIndicator,
   FAB,
   Portal,
   Headline,
 } from 'react-native-paper';
+import QuantityInput from '../components/forms/QuantityInput';
 import { exportService } from '../services/ExportService';
 import { importService } from '../services/ImportService';
 import ImportProgressDialog from '../components/dialogs/ImportProgressDialog';
@@ -105,7 +105,7 @@ function BreakScreen() {
   const [selectedMotive, setSelectedMotive] = useState();
   const [loading, setLoading] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
-  const [quantity, setQuantity] = useState('');
+  const [quantity, setQuantity] = useState({ value: '', unit: 'UN' });
   const [fabOpen, setFabOpen] = useState(false);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const refDropdown1 = useRef(null);
@@ -240,7 +240,7 @@ function BreakScreen() {
   };
 
   const handleSave = async () => {
-    if (!selectedMotive || !selectedProduct || !quantity) {
+    if (!selectedMotive || !selectedProduct || !quantity.value) {
       alert('Por favor, preencha todos os campos obrigatórios.');
       return;
     }
@@ -250,20 +250,15 @@ function BreakScreen() {
       await database.write(async () => {
         const selectedReason = await reasonsCollection.find(selectedMotive);
         
-        // Remove zeros à esquerda e converte vírgula para ponto
-        const sanitizedQuantity = quantity.replace(/^0+(?=\d)/, '').replace(',', '.');
-        const numericQuantity = parseFloat(sanitizedQuantity);
-        
-        // Validação básica: não permite números negativos
-        if (isNaN(numericQuantity) || numericQuantity < 0) {
-          throw new Error('A quantidade não pode ser negativa.');
-        }
+        // Usa os valores já validados e formatados do QuantityInput
+        const { value: quantityValue, unit: chosenUnitType } = quantity;
+        const numericQuantity = parseFloat(quantityValue);
 
         const newEntry = await entriesCollection.create(entry => {
           entry.productCodeValue = selectedProduct.productCode;
           entry.productName = selectedProduct.productName;
           entry.quantity = numericQuantity;
-          entry.unitType = selectedProduct.unitType;
+          entry.chosen_unit_type = chosenUnitType;
           entry.reasonCodeValue = selectedReason.code;
           entry.entryDate = Date.now();
           entry.isSynchronized = false;
@@ -341,21 +336,12 @@ function BreakScreen() {
           />
 
           {/* Seção de Quantidade */}
-          <TextInput
+          <QuantityInput
             label="Quantidade *"
             mode="outlined"
-            placeholder="Digite a quantidade"
             value={quantity}
-            onChangeText={(text) => {
-              // Remove caracteres não numéricos exceto ponto e vírgula
-              const sanitized = text.replace(/[^\d.,]/g, '');
-              // Permite apenas um separador decimal
-              const normalized = sanitized.replace(/[.,]/g, (match, offset) => {
-                return sanitized.indexOf('.') !== offset && sanitized.indexOf(',') !== offset ? '' : match;
-              });
-              setQuantity(normalized);
-            }}
-            keyboardType="numeric"
+            onChangeText={setQuantity}
+            initialUnitType={selectedProduct?.unitType || 'UN'}
             style={styles.input}
           />
 
@@ -363,7 +349,7 @@ function BreakScreen() {
           <Button
             mode="contained"
             onPress={handleSave}
-            disabled={loading || !selectedMotive || !selectedProduct || !quantity}
+            disabled={loading || !selectedMotive || !selectedProduct || !quantity.value}
             style={styles.saveButton}
           >
             Salvar

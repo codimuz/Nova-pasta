@@ -72,19 +72,24 @@ class ExportService {
    * @returns {string} - Quantidade formatada com 3 casas decimais
    * @throws {Error} Se a quantidade for inválida
    */
-  formatQuantity(quantity) {
+  formatQuantity(quantity, chosenUnitType) {
     const numValue = parseFloat(quantity);
     
     if (isNaN(numValue)) {
       throw new Error('Quantidade inválida');
     }
 
-    // Permite valores positivos incluindo zero
+    // Permite valores zero ou positivos
     if (numValue < 0) {
       throw new Error('Quantidade não pode ser negativa');
     }
 
-    // Normaliza para 3 casas decimais para exportação
+    // Usa o tipo escolhido pelo usuário, não o tipo do produto
+    if (chosenUnitType === 'UN') {
+      return Math.floor(numValue).toFixed(3);
+    }
+
+    // Para KG, mantém as casas decimais
     return numValue.toFixed(3);
   }
 
@@ -341,13 +346,14 @@ class ExportService {
         // Validação básica dos dados
         await this.validateProductCode(entry.product_code);
         
-        if (!entry.quantity) {
-          throw new Error('Quantidade não informada ou igual a zero');
+        if (entry.quantity === undefined || entry.quantity === null) {
+          throw new Error('Quantidade não informada');
         }
 
         // Formatação dos campos para exportação
         const formattedCode = this.formatProductCode(entry.product_code);
-        const formattedQuantity = this.formatQuantity(entry.quantity);
+        // Usa o tipo escolhido pelo usuário, não o tipo do produto
+        const formattedQuantity = this.formatQuantity(entry.quantity, entry.chosen_unit_type || entry.unit_type);
 
         // Montagem da linha no formato especificado
         const line = `Inventario ${formattedCode} ${formattedQuantity}`;

@@ -1,91 +1,144 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { View, StyleSheet } from 'react-native';
-import { TextInput, Button, IconButton } from 'react-native-paper';
-
-/**
- * Valida a entrada como número positivo, permitindo decimais
- * @param {string} value - Valor bruto digitado
- * @returns {{ isValid: boolean, value: string }} - Resultado da validação
- */
-const validateQuantity = (value) => {
-  // Remove caracteres não numéricos exceto ponto
-  const cleanValue = value.replace(/[^\d.]/g, '');
-
-  // Se vazio, é válido (permite limpar o campo)
-  if (!cleanValue) {
-    return { isValid: true, value: '' };
-  }
-
-  // Verifica se há mais de um ponto decimal
-  if ((cleanValue.match(/\./g) || []).length > 1) {
-    return { isValid: false, value };
-  }
-
-  const number = parseFloat(cleanValue);
-  
-  // Valida apenas se é um número positivo
-  const isValid = !isNaN(number) && number >= 0;
-
-  return {
-    isValid,
-    value: isValid ? cleanValue : value
-  };
-};
+import { TextInput, HelperText } from 'react-native-paper';
+import TextInputMask from 'react-native-text-input-mask';
 
 const QuantityInput = ({ value, onChangeText, initialUnitType = 'UN', label, mode = "outlined", style, error, ...props }) => {
   const [unitType, setUnitType] = useState(initialUnitType);
+  const [displayValue, setDisplayValue] = useState('');
+  const [validationError, setValidationError] = useState('');
+  const inputRef = useRef(null);
 
-  const handleChange = (text) => {
-    // Converte vírgula para ponto antes de validar
-    const normalizedText = text.replace(',', '.');
-    const result = validateQuantity(normalizedText);
+  const validateValue = (text) => {
+    if (!text) return { isValid: true, error: '' };
     
-    // Notifica mudança com o valor e o tipo selecionado
-    onChangeText({
-      value: result.value,
-      unit: unitType
-    });
+    const number = parseFloat(text);
+    
+    if (isNaN(number)) {
+      return { isValid: false, error: 'Digite um valor numérico válido' };
+    }
+    
+    if (number < 0) {
+      return { isValid: false, error: 'O valor não pode ser negativo' };
+    }
+    
+    if (number > 9999.99) {
+      return { isValid: false, error: 'O valor máximo é 9999.99' };
+    }
+    
+    return { isValid: true, error: '' };
   };
 
-  const toggleUnitType = () => {
-    setUnitType(current => current === 'KG' ? 'UN' : 'KG');
-  };
+  const handleChange = useCallback((formatted, extracted) => {
+    // O valor extraído já vem limpo da máscara
+    const cleanValue = extracted || '';
+    
+    // Validação básica
+    const validation = validateValue(cleanValue);
+    setValidationError(validation.error);
+
+    // Atualiza valor de exibição com formatação
+    setDisplayValue(formatted || '');
+    
+    // Notifica mudança com valor limpo e unidade
+    if (validation.isValid) {
+      onChangeText({
+        value: cleanValue || '0',
+        unit: unitType,
+        chosen_unit_type: unitType // Para compatibilidade com ExportService
+      });
+    }
+  }, [unitType, onChangeText]);
+
+  const handleBlur = useCallback(() => {
+    if (!displayValue) {
+      setDisplayValue('');
+      onChangeText({
+        value: '0',
+        unit: unitType,
+        chosen_unit_type: unitType
+      });
+      return;
+    }
+
+    const number = parseFloat(displayValue.replace(/[^\d.]/g, ''));
+    
+    if (!isNaN(number)) {
+      const formatted = unitType === 'KG' ? 
+        number.toFixed(2) :
+        Math.floor(number).toString();
+      
+      setDisplayValue(formatted);
+      onChangeText({
+        value: formatted,
+        unit: unitType,
+        chosen_unit_type: unitType
+      });
+    }
+  }, [displayValue, unitType, onChangeText]);
+
+  const toggleUnitType = useCallback(() => {
+    const newType = unitType === 'KG' ? 'UN' : 'KG';
+    setUnitType(newType);
+
+    if (displayValue) {
+      const number = parseFloat(displayValue.replace(/[^\d.]/g, ''));
+      if (!isNaN(number)) {
+        const newValue = newType === 'KG' ? 
+          number.toFixed(2) :
+          Math.floor(number).toString();
+        
+        setDisplayValue(newValue);
+        onChangeText({
+          value: newValue,
+          unit: newType,
+          chosen_unit_type: newType
+        });
+      }
+    }
+  }, [displayValue, unitType, onChangeText]);
 
   return (
     <View style={styles.container}>
       <TextInput
         label={label || 'Quantidade'}
         mode={mode}
-        value={value?.value || ''}
-        onChangeText={handleChange}
-        keyboardType="decimal-pad"
-        error={!validateQuantity(value?.value || '').isValid && Boolean(value?.value)}
+        value={displayValue}
+        onBlur={handleBlur}
+        error={Boolean(validationError) || error}
         style={[styles.input, style]}
+        render={props => (
+          <TextInputMask
+            {...props}
+            ref={inputRef}
+            mask={unitType === 'KG' ? '[9999].[99]' : '[9999]'}
+            onChangeText={handleChange}
+            keyboardType="decimal-pad"
+          />
+        )}
+        right={
+          <TextInput.Icon
+            icon={unitType === 'KG' ? 'scale' : 'numeric'}
+            onPress={toggleUnitType}
+          />
+        }
         {...props}
       />
-      <Button
-        mode="contained"
-        onPress={toggleUnitType}
-        style={styles.unitButton}
-      >
-        {unitType}
-      </Button>
+      {validationError ? (
+        <HelperText type="error" visible={true}>
+          {validationError}
+        </HelperText>
+      ) : null}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8
+    width: '100%'
   },
   input: {
-    flex: 1
-  },
-  unitButton: {
-    minWidth: 60,
-    marginLeft: 8
+    width: '100%'
   }
 });
 
