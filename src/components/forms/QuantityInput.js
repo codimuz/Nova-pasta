@@ -3,12 +3,11 @@ import { View, StyleSheet } from 'react-native';
 import { TextInput, Button, IconButton } from 'react-native-paper';
 
 /**
- * Formata e valida a entrada de quantidade conforme o tipo de unidade
+ * Valida a entrada como número positivo, permitindo decimais
  * @param {string} value - Valor bruto digitado
- * @param {string} unitType - Tipo de unidade (KG ou UN)
  * @returns {{ isValid: boolean, value: string }} - Resultado da validação
  */
-const validateQuantity = (value, unitType) => {
+const validateQuantity = (value) => {
   // Remove caracteres não numéricos exceto ponto
   const cleanValue = value.replace(/[^\d.]/g, '');
 
@@ -17,72 +16,50 @@ const validateQuantity = (value, unitType) => {
     return { isValid: true, value: '' };
   }
 
-  // Valida o formato conforme o tipo de unidade
-  if (unitType === 'KG') {
-    // Para KG: formato 00.00 (até duas casas decimais)
-    const [intPart, decPart = ''] = cleanValue.split('.');
-    
-    // Verifica se tem no máximo duas casas decimais
-    if (decPart.length > 2) {
-      return { isValid: false, value };
-    }
-
-    const number = parseFloat(cleanValue);
-    const isValid = !isNaN(number) && number > 0 && number <= 9999.99;
-
-    if (isValid) {
-      // Formata com duas casas decimais se houver ponto
-      if (cleanValue.includes('.')) {
-        return {
-          isValid: true,
-          value: number.toFixed(2)
-        };
-      }
-      return { isValid: true, value: cleanValue };
-    }
+  // Verifica se há mais de um ponto decimal
+  if ((cleanValue.match(/\./g) || []).length > 1) {
     return { isValid: false, value };
-  } else {
-    // Para UN: formato #### (inteiros de 1 a 9999)
-    if (cleanValue.includes('.')) {
-      return { isValid: false, value };
-    }
-
-    const number = parseInt(cleanValue, 10);
-    const isValid = !isNaN(number) && number >= 1 && number <= 9999;
-
-    return {
-      isValid,
-      value: isValid ? String(number) : value
-    };
   }
+
+  const number = parseFloat(cleanValue);
+  
+  // Valida apenas se é um número positivo
+  const isValid = !isNaN(number) && number >= 0;
+
+  return {
+    isValid,
+    value: isValid ? cleanValue : value
+  };
 };
 
 const QuantityInput = ({ value, onChangeText, initialUnitType = 'UN', label, mode = "outlined", style, error, ...props }) => {
   const [unitType, setUnitType] = useState(initialUnitType);
 
   const handleChange = (text) => {
-    const result = validateQuantity(text, unitType);
-    onChangeText(result.value);
+    // Converte vírgula para ponto antes de validar
+    const normalizedText = text.replace(',', '.');
+    const result = validateQuantity(normalizedText);
+    
+    // Notifica mudança com o valor e o tipo selecionado
+    onChangeText({
+      value: result.value,
+      unit: unitType
+    });
   };
 
   const toggleUnitType = () => {
-    // Limpa o valor ao trocar o tipo
-    onChangeText('');
     setUnitType(current => current === 'KG' ? 'UN' : 'KG');
   };
 
-  const placeholder = unitType === 'KG' ? '00.00' : '####';
-  
   return (
     <View style={styles.container}>
       <TextInput
         label={label || 'Quantidade'}
         mode={mode}
-        value={value}
-        placeholder={placeholder}
+        value={value?.value || ''}
         onChangeText={handleChange}
         keyboardType="decimal-pad"
-        error={!validateQuantity(value, unitType).isValid && Boolean(value)}
+        error={!validateQuantity(value?.value || '').isValid && Boolean(value?.value)}
         style={[styles.input, style]}
         {...props}
       />

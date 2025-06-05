@@ -70,7 +70,7 @@ class ExportService {
    * Formata a quantidade para ter exatamente 3 casas decimais na exportação
    * @param {number} quantity - Quantidade a ser formatada
    * @returns {string} - Quantidade formatada com 3 casas decimais
-   * @throws {Error} Se a quantidade for inválida ou negativa
+   * @throws {Error} Se a quantidade for inválida
    */
   formatQuantity(quantity) {
     const numValue = parseFloat(quantity);
@@ -79,19 +79,12 @@ class ExportService {
       throw new Error('Quantidade inválida');
     }
 
+    // Permite valores positivos incluindo zero
     if (numValue < 0) {
       throw new Error('Quantidade não pode ser negativa');
     }
 
-    if (numValue === 0) {
-      throw new Error('Quantidade não pode ser zero');
-    }
-
-    if (numValue > 9999.99) {
-      throw new Error('Quantidade não pode ser maior que 9999.99');
-    }
-
-    // Sempre normaliza para 3 casas decimais na exportação
+    // Normaliza para 3 casas decimais para exportação
     return numValue.toFixed(3);
   }
 

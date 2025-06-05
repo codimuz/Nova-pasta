@@ -9,10 +9,12 @@ export class EntryService {
    * Cria uma nova entrada no inventário.
    * @param {string} productCode - Código de barras do produto.
    * @param {string} reasonId - ID do WatermelonDB da Reason.
-   * @param {number} quantity - Quantidade da entrada.
+   * @param {Object} quantityData - Dados da quantidade.
+   * @param {string} quantityData.value - Valor da quantidade.
+   * @param {string} quantityData.unit - Tipo de unidade escolhido (KG ou UN).
    * @returns {Promise<Entry>} Entrada criada.
    */
-  static async createEntry(productCode, reasonId, quantity) {
+  static async createEntry(productCode, reasonId, quantityData) {
     return await database.write(async () => {
       // Buscar o produto pelo código
       const productsCollection = database.get('products');
@@ -37,7 +39,8 @@ export class EntryService {
         // Definir campos básicos
         entry.productCodeValue = productCode;
         entry.productName = product.productName;
-        entry.quantity = quantity;
+        entry.quantity = parseFloat(quantityData.value);
+        entry.chosen_unit_type = quantityData.unit;
         entry.reasonCodeValue = reason.code;
         entry.entryDate = new Date();
         entry.isSynchronized = false;
@@ -65,6 +68,7 @@ export class EntryService {
       product_code: entry.productCodeValue,
       product_name: entry.productName,
       quantity: entry.quantity,
+      chosen_unit_type: entry.chosen_unit_type,
       reason_id: entry.linkedReasonId,
       reason_code: entry.reasonCodeValue,
       entry_date: entry.entryDate,
@@ -91,6 +95,7 @@ export class EntryService {
       product_code: entry.productCodeValue,
       product_name: entry.productName,
       quantity: entry.quantity,
+      chosen_unit_type: entry.chosen_unit_type,
       reason_id: entry.reason.id,
       reason_code: entry.reasonCodeValue,
       entry_date: entry.entryDate,
@@ -121,6 +126,7 @@ export class EntryService {
       product_code: entry.productCodeValue,
       product_name: entry.productName,
       quantity: entry.quantity,
+      chosen_unit_type: entry.chosen_unit_type,
       reason_id: entry.reason.id,
       reason_code: entry.reasonCodeValue,
       entry_date: entry.entryDate,
@@ -173,6 +179,7 @@ export class EntryService {
         product_code: entry.productCodeValue,
         product_name: entry.productName,
         quantity: entry.quantity,
+        chosen_unit_type: entry.chosen_unit_type,
         reason_id: entry.reason.id,
         reason_code: entry.reasonCodeValue,
         entry_date: entry.entryDate,

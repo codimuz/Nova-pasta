@@ -32,6 +32,7 @@ export default appSchema({
         { name: 'product_code_value', type: 'string', isIndexed: true },
         { name: 'product_name', type: 'string' },
         { name: 'quantity', type: 'number' },
+        { name: 'chosen_unit_type', type: 'string', isOptional: true }, // Tipo de unidade escolhido pelo usuário (KG ou UN)
         { name: 'reason_code_value', type: 'string', isIndexed: true },
         { name: 'entry_date', type: 'number', isIndexed: true },
         { name: 'is_synchronized', type: 'boolean', isOptional: true },
