@@ -564,7 +564,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'flex-start',
     alignItems: 'center',
-    paddingTop: 100, // Espaço aproximado do topo da tela até o campo de busca
+    paddingTop: 205, // Aumentado significativamente para posicionar bem abaixo
     paddingHorizontal: 16,
   },
   portalContainer: {
