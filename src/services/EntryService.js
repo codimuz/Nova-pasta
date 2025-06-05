@@ -81,6 +81,11 @@ export class EntryService {
     const entries = await entriesCollection.query().fetch();
     const unsyncedEntries = entries.filter(entry => !entry.isSynchronized);
     
+    // Buscar produtos relacionados para obter o tipo de unidade
+    const productsCollection = database.get('products');
+    const products = await productsCollection.query().fetch();
+    const productsMap = new Map(products.map(p => [p.productCode, p]));
+    
     return unsyncedEntries.map(entry => ({
       id: entry.id,
       product_code: entry.productCodeValue,
@@ -89,7 +94,38 @@ export class EntryService {
       reason_id: entry.reason.id,
       reason_code: entry.reasonCodeValue,
       entry_date: entry.entryDate,
-      is_synchronized: entry.isSynchronized
+      is_synchronized: entry.isSynchronized,
+      unit_type: productsMap.get(entry.productCodeValue)?.unitType || 'UN'
+    }));
+  }
+
+  /**
+   * Busca entradas não sincronizadas por motivo.
+   * @param {string} reasonId - ID do motivo.
+   * @returns {Promise<Entry[]>} Lista de entradas não sincronizadas do motivo.
+   */
+  static async getUnsyncedEntriesByReason(reasonId) {
+    const entriesCollection = database.get('entries');
+    const entries = await entriesCollection.query().fetch();
+    const filteredEntries = entries.filter(entry =>
+      !entry.isSynchronized && entry.reason.id === reasonId
+    );
+    
+    // Buscar produtos relacionados para obter o tipo de unidade
+    const productsCollection = database.get('products');
+    const products = await productsCollection.query().fetch();
+    const productsMap = new Map(products.map(p => [p.productCode, p]));
+    
+    return filteredEntries.map(entry => ({
+      id: entry.id,
+      product_code: entry.productCodeValue,
+      product_name: entry.productName,
+      quantity: entry.quantity,
+      reason_id: entry.reason.id,
+      reason_code: entry.reasonCodeValue,
+      entry_date: entry.entryDate,
+      is_synchronized: entry.isSynchronized,
+      unit_type: productsMap.get(entry.productCodeValue)?.unitType || 'UN'
     }));
   }
 

@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState, useEffect } from 'react';
-import { ScrollView, StyleSheet, View, ViewStyle, Text, Keyboard, TouchableRipple } from 'react-native';
+import { ScrollView, StyleSheet, View, Text, Keyboard, TouchableOpacity, SafeAreaView } from 'react-native';
 import {
   Appbar,
   Button,
@@ -12,31 +12,18 @@ import {
   Headline,
 } from 'react-native-paper';
 import { exportService } from '../services/ExportService';
+import { importService } from '../services/ImportService';
+import ImportProgressDialog from '../components/dialogs/ImportProgressDialog';
 import { useNavigation } from '@react-navigation/native';
 import ThemeToggle from '../components/common/ThemeToggle';
-import {
-  Dropdown,
-  MultiSelectDropdown,
-  DropdownInputProps,
-  DropdownItemProps,
-  DropdownRef,
-} from 'react-native-paper-dropdown';
-import { ReasonService } from '../services/ReasonService';
+import { Dropdown } from 'react-native-paper-dropdown';
 import ProductSearchChipInput from '../components/ProductSearchChipInput';
+import { database } from '../database';
+import withObservables from '@nozbe/with-observables';
+import { Q } from '@nozbe/watermelondb';
 
-// Dados mocados removidos - agora usa dados dinâmicos do banco
-const OPTIONS = [];
-const MULTI_SELECT_OPTIONS = [];
 
-const CustomDropdownItem = ({
-  width,
-  option,
-  value,
-  onSelect,
-  toggleMenu,
-  isLast,
-  theme,
-}) => {
+const CustomDropdownItem = ({ width, option, value, onSelect, toggleMenu, isLast, theme }) => {
   const style = useMemo(
     () => ({
       height: 50,
@@ -53,7 +40,7 @@ const CustomDropdownItem = ({
 
   return (
     <>
-      <TouchableRipple
+      <TouchableOpacity
         onPress={() => {
           onSelect?.(option.value);
           toggleMenu();
@@ -70,18 +57,13 @@ const CustomDropdownItem = ({
         >
           {option.label}
         </Headline>
-      </TouchableRipple>
+      </TouchableOpacity>
       {!isLast && <Divider />}
     </>
   );
 };
 
-const CustomDropdownInput = ({
-  placeholder,
-  selectedLabel,
-  rightIcon,
-  theme,
-}) => {
+const CustomDropdownInput = ({ placeholder, selectedLabel, rightIcon, theme }) => {
   return (
     <TextInput
       mode="outlined"
@@ -97,20 +79,51 @@ const CustomDropdownInput = ({
   );
 };
 
-export default function BreakScreen() {
+function BreakScreen() {
+  const [reasons, setReasons] = useState([]);
+  const reasonsCollection = useMemo(() => database.get('reasons'), []);
+  const entriesCollection = useMemo(() => database.get('entries'), []);
+
+  useEffect(() => {
+    const loadReasons = async () => {
+      try {
+        const query = reasonsCollection.query(
+          Q.sortBy('code', Q.asc)
+        );
+        const results = await query.fetch();
+        setReasons(results);
+      } catch (error) {
+        console.error('Erro ao carregar motivos:', error);
+        setReasons([]);
+      }
+    };
+
+    loadReasons();
+  }, [reasonsCollection]);
   const navigation = useNavigation();
   const theme = useTheme();
   const [selectedMotive, setSelectedMotive] = useState();
-  const [colors, setColors] = useState([]);
-  const [motiveOptions, setMotiveOptions] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [quantity, setQuantity] = useState('');
   const [fabOpen, setFabOpen] = useState(false);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const refDropdown1 = useRef(null);
+  
+  // Estados para o dialog de progresso de importação
+  const [importDialogVisible, setImportDialogVisible] = useState(false);
+  const [importProgress, setImportProgress] = useState({
+    progress: 0,
+    status: 'Preparando importação...',
+    currentFile: '',
+    processedLines: 0,
+    totalLines: 0,
+    isCompleted: false,
+    hasError: false,
+    canCancel: true
+  });
+  const cancelTokenRef = useRef({ cancelled: false });
 
-  // Monitorar visibilidade do teclado
   useEffect(() => {
     const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', () => {
       setIsKeyboardVisible(true);
@@ -134,53 +147,156 @@ export default function BreakScreen() {
     }
   };
 
+  const handleImport = async () => {
+    setFabOpen(false);
+    cancelTokenRef.current = { cancelled: false };
+    setImportProgress({
+      progress: 0,
+      status: 'Preparando importação...',
+      currentFile: '',
+      processedLines: 0,
+      totalLines: 0,
+      isCompleted: false,
+      hasError: false,
+      canCancel: true
+    });
+    
+    setImportDialogVisible(true);
+    
+    try {
+      const result = await importService.importProducts(
+        (progressData) => {
+          setImportProgress(prev => ({
+            ...prev,
+            progress: progressData.progress || 0,
+            status: progressData.status || 'Processando...',
+            currentFile: progressData.currentFile || '',
+            processedLines: progressData.processedLines || 0,
+            totalLines: progressData.totalLines || 0,
+            hasError: progressData.hasError || false,
+            canCancel: !progressData.hasError && progressData.progress < 1
+          }));
+        },
+        cancelTokenRef.current
+      );
+      
+      setImportProgress(prev => ({
+        ...prev,
+        isCompleted: true,
+        canCancel: false,
+        status: result.success ?
+          `✅ Importação concluída! ${result.stats.inserted} criados, ${result.stats.updated} atualizados` :
+          `❌ ${result.message}`,
+        progress: result.success ? 1 : 0
+      }));
+      
+    } catch (error) {
+      console.error('Erro na importação:', error);
+      
+      setImportProgress(prev => ({
+        ...prev,
+        isCompleted: true,
+        hasError: true,
+        canCancel: false,
+        status: `❌ Erro: ${error.message}`,
+        progress: 0
+      }));
+    }
+  };
 
-  // Carregar motivos do banco de dados
-  useEffect(() => {
-    const loadMotives = async () => {
-      try {
-        setLoading(true);
-        const reasons = await ReasonService.getAllReasons();
-        const formattedOptions = reasons.map(reason => ({
-          label: `${reason.code} – ${reason.description}`,
-          value: reason.id
-        }));
-        setMotiveOptions(formattedOptions);
-      } catch (error) {
-        console.error('Erro ao carregar motivos:', error);
-        setMotiveOptions([]);
-      } finally {
-        setLoading(false);
-      }
-    };
+  const handleSanitize = async () => {
+    setFabOpen(false);
+    try {
+      const stats = await importService.sanitizeExistingProducts();
+      console.log('Sanitização concluída:', stats);
+    } catch (error) {
+      console.error('Erro na sanitização:', error);
+    }
+  };
 
-    loadMotives();
-  }, []);
+  const handleCancelImport = () => {
+    cancelTokenRef.current.cancelled = true;
+    setImportProgress(prev => ({
+      ...prev,
+      status: 'Cancelando importação...',
+      canCancel: false
+    }));
+  };
 
-  const handleSave = () => {
-    // Validação básica
+  const handleDismissImportDialog = () => {
+    setImportDialogVisible(false);
+    setTimeout(() => {
+      setImportProgress({
+        progress: 0,
+        status: 'Preparando importação...',
+        currentFile: '',
+        processedLines: 0,
+        totalLines: 0,
+        isCompleted: false,
+        hasError: false,
+        canCancel: true
+      });
+    }, 300);
+  };
+
+  const handleSave = async () => {
     if (!selectedMotive || !selectedProduct || !quantity) {
       alert('Por favor, preencha todos os campos obrigatórios.');
       return;
     }
 
-    // TODO: Implementar salvamento no banco
-    console.log('Salvando quebra:', {
-      motivo: selectedMotive,
-      produto: selectedProduct,
-      quantidade: quantity
-    });
+    setLoading(true);
+    try {
+      await database.write(async () => {
+        const selectedReason = await reasonsCollection.find(selectedMotive);
+        
+        // Remove zeros à esquerda e converte vírgula para ponto
+        const sanitizedQuantity = quantity.replace(/^0+(?=\d)/, '').replace(',', '.');
+        const numericQuantity = parseFloat(sanitizedQuantity);
+        
+        // Validação básica: não permite números negativos
+        if (isNaN(numericQuantity) || numericQuantity < 0) {
+          throw new Error('A quantidade não pode ser negativa.');
+        }
 
-    // Reset do formulário
-    setSelectedMotive(undefined);
-    setSelectedProduct(null);
-    setQuantity('');
-    
-    alert('Quebra registrada com sucesso!');
+        const newEntry = await entriesCollection.create(entry => {
+          entry.productCodeValue = selectedProduct.productCode;
+          entry.productName = selectedProduct.productName;
+          entry.quantity = numericQuantity;
+          entry.unitType = selectedProduct.unitType;
+          entry.reasonCodeValue = selectedReason.code;
+          entry.entryDate = Date.now();
+          entry.isSynchronized = false;
+        });
+        
+        await newEntry.update(entry => {
+          entry.product.set(selectedProduct);
+          entry.reason.set(selectedReason);
+        });
+      });
+
+      // Reset apenas produto e quantidade, mantendo o motivo selecionado
+      setSelectedProduct(null);
+      setQuantity('');
+      
+      alert('Quebra registrada com sucesso!');
+    } catch (error) {
+      console.error('Erro ao salvar quebra:', error);
+      alert('Erro ao registrar quebra. Tente novamente.');
+    } finally {
+      setLoading(false);
+    }
   };
 
+  const motiveOptions = useMemo(() => {
+    return reasons.map(reason => ({
+      label: `${reason.code} – ${reason.description}`,
+      value: reason.id
+    }));
+  }, [reasons]);
+
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <Appbar.Header>
         <Appbar.Action icon="menu" onPress={() => navigation.openDrawer()} />
         <Appbar.Content title="Registrar Quebra" />
@@ -230,7 +346,15 @@ export default function BreakScreen() {
             mode="outlined"
             placeholder="Digite a quantidade"
             value={quantity}
-            onChangeText={setQuantity}
+            onChangeText={(text) => {
+              // Remove caracteres não numéricos exceto ponto e vírgula
+              const sanitized = text.replace(/[^\d.,]/g, '');
+              // Permite apenas um separador decimal
+              const normalized = sanitized.replace(/[.,]/g, (match, offset) => {
+                return sanitized.indexOf('.') !== offset && sanitized.indexOf(',') !== offset ? '' : match;
+              });
+              setQuantity(normalized);
+            }}
             keyboardType="numeric"
             style={styles.input}
           />
@@ -256,9 +380,15 @@ export default function BreakScreen() {
             icon={fabOpen ? 'close' : 'plus'}
             actions={[
               {
+                icon: 'auto-fix',
+                label: 'Corrigir',
+                onPress: handleSanitize,
+                color: theme.colors.secondary,
+              },
+              {
                 icon: 'file-import',
                 label: 'Importar',
-                onPress: () => console.log('Importar'),
+                onPress: handleImport,
                 color: theme.colors.primary,
               },
               {
@@ -274,7 +404,22 @@ export default function BreakScreen() {
           />
         )}
       </Portal>
-    </View>
+
+      {/* Dialog de Progresso de Importação */}
+      <ImportProgressDialog
+        visible={importDialogVisible}
+        onDismiss={handleDismissImportDialog}
+        onCancel={handleCancelImport}
+        progress={importProgress.progress}
+        status={importProgress.status}
+        currentFile={importProgress.currentFile}
+        processedLines={importProgress.processedLines}
+        totalLines={importProgress.totalLines}
+        canCancel={importProgress.canCancel}
+        isCompleted={importProgress.isCompleted}
+        hasError={importProgress.hasError}
+      />
+    </SafeAreaView>
   );
 }
 
@@ -311,6 +456,8 @@ const styles = StyleSheet.create({
     marginTop: 24,
   },
   fabGroup: {
-    paddingBottom: 16, // Espaçamento do bottom da tela
+    paddingBottom: 16,
   }
 });
+
+export default BreakScreen;

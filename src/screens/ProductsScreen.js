@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, ScrollView, SafeAreaView } from 'react-native';
 import { Appbar, Text, useTheme } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 
@@ -14,13 +14,13 @@ const ProductsScreen = () => {
   const navigation = useNavigation();
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <Appbar.Header>
         <Appbar.Action icon="menu" onPress={() => navigation.openDrawer()} />
         <Appbar.Content title="Gestão de Produtos" />
       </Appbar.Header>
       
-      <View style={styles.content}>
+      <ScrollView contentContainerStyle={styles.content}>
         <Text variant="headlineMedium" style={[styles.title, { color: theme.colors.onSurface }]}>
           📦 Gestão de Produtos
         </Text>
@@ -43,8 +43,8 @@ const ProductsScreen = () => {
           • Importação em lote de produtos{'\n'}
           • Categorização de produtos
         </Text>
-      </View>
-    </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 };
 

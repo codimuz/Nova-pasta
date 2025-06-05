@@ -26,19 +26,40 @@ class ExportService {
    */
   async consolidateEntries(entries) {
     try {
-      // Agrupar entradas por product_code e somar quantities
-      const consolidated = entries.reduce((acc, entry) => {
+      // Agrupar entradas por product_code
+      const groupedEntries = entries.reduce((acc, entry) => {
         if (!acc[entry.product_code]) {
-          acc[entry.product_code] = {
-            product_code: entry.product_code,
-            quantity: 0
-          };
+          acc[entry.product_code] = [];
         }
-        acc[entry.product_code].quantity += entry.quantity;
+        acc[entry.product_code].push(entry);
         return acc;
       }, {});
-      
-      return Object.values(consolidated);
+
+      // Consolidar cada grupo separadamente
+      const consolidated = Object.entries(groupedEntries).map(([code, groupEntries]) => {
+        const firstEntry = groupEntries[0];
+        const totalQuantity = groupEntries.reduce((sum, entry) => {
+          const quantity = parseFloat(entry.quantity);
+          if (isNaN(quantity)) {
+            throw new Error(`Quantidade inválida para produto ${entry.product_code}: ${entry.quantity}`);
+          }
+          return sum + quantity;
+        }, 0);
+
+        // Validar quantidade total
+        if (totalQuantity < 0) {
+          throw new Error(`Quantidade total inválida para produto ${code}: ${totalQuantity}`);
+        }
+
+        return {
+          product_code: code,
+          product_name: firstEntry.product_name,
+          quantity: totalQuantity,
+          unit_type: firstEntry.unit_type
+        };
+      });
+
+      return consolidated;
     } catch (error) {
       console.error('EXPORT_SERVICE: Erro ao consolidar entradas:', error);
       throw new Error(`Falha ao consolidar entradas: ${error.message}`);
@@ -46,16 +67,32 @@ class ExportService {
   }
 
   /**
-   * Formata a quantidade baseado no tipo de unidade do produto
+   * Formata a quantidade para ter exatamente 3 casas decimais na exportação
    * @param {number} quantity - Quantidade a ser formatada
-   * @param {string} unitType - Tipo de unidade (KG ou UN)
    * @returns {string} - Quantidade formatada com 3 casas decimais
+   * @throws {Error} Se a quantidade for inválida ou negativa
    */
-  formatQuantity(quantity, unitType) {
-    if (unitType === 'UN') {
-      quantity = Math.floor(quantity);
+  formatQuantity(quantity) {
+    const numValue = parseFloat(quantity);
+    
+    if (isNaN(numValue)) {
+      throw new Error('Quantidade inválida');
     }
-    return quantity.toFixed(3);
+
+    if (numValue < 0) {
+      throw new Error('Quantidade não pode ser negativa');
+    }
+
+    if (numValue === 0) {
+      throw new Error('Quantidade não pode ser zero');
+    }
+
+    if (numValue > 9999.99) {
+      throw new Error('Quantidade não pode ser maior que 9999.99');
+    }
+
+    // Sempre normaliza para 3 casas decimais na exportação
+    return numValue.toFixed(3);
   }
 
   /**
@@ -183,8 +220,8 @@ class ExportService {
     try {
       console.log(`EXPORT_SERVICE: Processando motivo ${reason.code} - ${reason.description}`);
       
-      const allEntries = await EntryService.getUnsyncedEntries();
-      const entries = allEntries.filter(entry => entry.reason_id === reason.id);
+      // Buscar apenas entradas não sincronizadas para o motivo específico
+      const entries = await EntryService.getUnsyncedEntriesByReason(reason.id);
       
       if (!entries || entries.length === 0) {
         console.log(`EXPORT_SERVICE: Nenhuma entrada pendente para motivo ${reason.code}`);
@@ -289,6 +326,16 @@ class ExportService {
    * Gerar conteúdo do arquivo no formato especificado
    * com validações e formatações necessárias
    */
+  async validateProductCode(code) {
+    if (!code || code.length > 13) {
+      throw new Error(`Código de produto ${code} inválido: deve ter no máximo 13 dígitos`);
+    }
+    if (!/^\d+$/.test(code)) {
+      throw new Error(`Código de produto ${code} inválido: deve conter apenas dígitos`);
+    }
+    return true;
+  }
+
   async generateFileContent(entries) {
     console.log('EXPORT_SERVICE: Gerando conteúdo do arquivo com', entries.length, 'entradas');
     const lines = [];
@@ -298,30 +345,26 @@ class ExportService {
       try {
         console.log('EXPORT_SERVICE: Processando entrada:', entry);
         
-        if (!entry.product_code || !entry.quantity) {
-          console.error('EXPORT_SERVICE: Entrada inválida:', entry);
-          errors.push(`Entrada inválida: código ou quantidade ausente`);
-          continue;
+        // Validação básica dos dados
+        await this.validateProductCode(entry.product_code);
+        
+        if (!entry.quantity) {
+          throw new Error('Quantidade não informada ou igual a zero');
         }
 
-        const product = await productService.getProductByCode(entry.product_code);
-        if (!product) {
-          console.error(`EXPORT_SERVICE: Produto não encontrado: ${entry.product_code}`);
-          errors.push(`Produto não encontrado: ${entry.product_code}`);
-          continue;
-        }
-
-        console.log('EXPORT_SERVICE: Produto encontrado:', product);
-
+        // Formatação dos campos para exportação
         const formattedCode = this.formatProductCode(entry.product_code);
-        const formattedQuantity = this.formatQuantity(entry.quantity, product.unitType);
+        const formattedQuantity = this.formatQuantity(entry.quantity);
 
+        // Montagem da linha no formato especificado
         const line = `Inventario ${formattedCode} ${formattedQuantity}`;
         console.log('EXPORT_SERVICE: Linha gerada:', line);
         lines.push(line);
+        
       } catch (error) {
         console.error(`EXPORT_SERVICE: Erro ao processar entrada:`, error);
-        errors.push(`Erro ao processar entrada: ${error.message}`);
+        errors.push(`Erro ao processar entrada ${entry.product_code}: ${error.message}`);
+        continue;
       }
     }
     

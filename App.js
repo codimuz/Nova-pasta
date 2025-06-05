@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, StyleSheet, StatusBar, Platform } from 'react-native';
+import { View, StyleSheet, StatusBar, Platform, Text } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { PaperProvider } from 'react-native-paper';
 import { NavigationContainer } from '@react-navigation/native';
@@ -159,11 +159,39 @@ const AppContent = () => {
 };
 
 // Main App component with ThemeProvider
+const ErrorBoundary = ({ children }) => {
+  const [hasError, setHasError] = React.useState(false);
+
+  React.useEffect(() => {
+    if (hasError) {
+      const timer = setTimeout(() => setHasError(false), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [hasError]);
+
+  if (hasError) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <Text>Ocorreu um erro. Tentando recuperar...</Text>
+      </View>
+    );
+  }
+
+  try {
+    return children;
+  } catch (error) {
+    setHasError(true);
+    return null;
+  }
+};
+
 const App = () => {
   return (
-    <ThemeProvider>
-      <AppContent />
-    </ThemeProvider>
+    <ErrorBoundary>
+      <ThemeProvider>
+        <AppContent />
+      </ThemeProvider>
+    </ErrorBoundary>
   );
 };
 

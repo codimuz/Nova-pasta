@@ -1,6 +1,6 @@
 // src/screens/HomeScreen.js
 import React from 'react';
-import { View, StyleSheet, ScrollView } from 'react-native';
+import { View, StyleSheet, ScrollView, SafeAreaView } from 'react-native';
 import { Appbar, Text, useTheme, Card, Button, List } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import ThemeToggle from '../components/common/ThemeToggle';
@@ -61,7 +61,7 @@ const HomeScreen = () => {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <Appbar.Header>
         <Appbar.Action icon="menu" onPress={() => navigation.openDrawer()} />
         <Appbar.Content title="Início - Inventário" />
@@ -143,7 +143,7 @@ const HomeScreen = () => {
           Utilize o menu lateral para explorar todas as funcionalidades do aplicativo.
         </Text>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 };
 
