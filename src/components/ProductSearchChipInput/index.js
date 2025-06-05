@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, TouchableOpacity, Text, FlatList } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Text, FlatList, ScrollView } from 'react-native';
 import { TextInput, Chip, Menu, List, ActivityIndicator, useTheme } from 'react-native-paper';
 import { ProductService } from '../../services/ProductService';
 

@@ -659,6 +659,407 @@ class ImportService {
       throw new Error(`Falha ao obter estatísticas: ${error.message}`);
     }
   }
+
+  /**
+   * Processa uma linha individual do arquivo de motivos (reasons)
+   * @param {string} line - Linha do arquivo CSV
+   * @param {number} lineNumber - Número da linha
+   * @param {Set} processedCodes - Set de códigos já processados
+   * @param {Object} reasonsCollection - Coleção de motivos do WatermelonDB
+   * @returns {Promise<Object>} - Resultado do processamento
+   */
+  async processReasonLine(line, lineNumber, processedCodes, reasonsCollection) {
+    // Detectar separador (vírgula ou ponto e vírgula)
+    const separator = line.includes(';') ? ';' : ',';
+    const fields = line.split(separator).map(field => field.trim());
+    
+    // Validar se tem exatamente 2 campos: code e description
+    if (fields.length !== 2) {
+      return {
+        success: false,
+        error: `Linha deve ter exatamente 2 campos separados por '${separator}' (code${separator}description). Encontrados ${fields.length} campos.`
+      };
+    }
+
+    const [reasonCode, reasonDescription] = fields;
+
+    // Ignorar linha de cabeçalho (primeira linha com "code" e "description")
+    if ((reasonCode.toLowerCase() === 'code' && reasonDescription.toLowerCase() === 'description') ||
+        (reasonCode.toLowerCase() === 'código' && reasonDescription.toLowerCase() === 'descrição')) {
+      return { success: true, action: 'skipped_header' };
+    }
+
+    // Validar código do motivo (não pode ser vazio)
+    if (!reasonCode) {
+      return {
+        success: false,
+        error: 'Código do motivo não pode ser vazio.'
+      };
+    }
+
+    // Validar descrição do motivo (não pode ser vazia)
+    if (!reasonDescription) {
+      return {
+        success: false,
+        error: 'Descrição do motivo não pode ser vazia.'
+      };
+    }
+
+    // Verificar duplicatas dentro do mesmo arquivo
+    if (processedCodes.has(reasonCode)) {
+      return {
+        success: false,
+        error: `Código de motivo duplicado neste arquivo: '${reasonCode}'.`
+      };
+    }
+    processedCodes.add(reasonCode);
+
+    // Verificar se motivo já existe no banco
+    const existingReasons = await reasonsCollection
+      .query(
+        Q.where('code', reasonCode)
+      )
+      .fetch();
+
+    if (existingReasons.length > 0) {
+      // Motivo existe - fazer UPDATE
+      const reasonToUpdate = existingReasons[0];
+      await reasonToUpdate.update(reason => {
+        reason.description = reasonDescription;
+        // updatedAt será gerenciado automaticamente pelo WatermelonDB
+      });
+      
+      console.log(`IMPORT_SERVICE: Motivo atualizado - ${reasonCode}: ${reasonDescription}`);
+      return { success: true, action: 'updated' };
+    } else {
+      // Motivo não existe - fazer CREATE
+      await reasonsCollection.create(reason => {
+        reason.code = reasonCode;
+        reason.description = reasonDescription;
+        // createdAt e updatedAt serão gerenciados automaticamente pelo WatermelonDB
+      });
+      
+      console.log(`IMPORT_SERVICE: Motivo criado - ${reasonCode}: ${reasonDescription}`);
+      return { success: true, action: 'inserted' };
+    }
+  }
+
+  /**
+   * Lê e processa o conteúdo do arquivo de motivos CSV
+   * @param {Object} asset - Asset do arquivo selecionado
+   * @param {Function} onProgress - Callback para progresso (opcional)
+   * @param {Object} cancelToken - Token para cancelamento (opcional)
+   * @returns {Promise<Object>} - Estatísticas da importação
+   */
+  async processReasonFile(asset, onProgress = null, cancelToken = { cancelled: false }) {
+    const stats = {
+      inserted: 0,
+      updated: 0,
+      errors: [], // Array de {lineNumber, lineContent, error}
+      fileName: asset.name || 'motivos.csv',
+      cancelled: false
+    };
+    const processedReasonCodesInFile = new Set(); // Para evitar duplicatas do arquivo
+
+    try {
+      // Callback inicial
+      if (onProgress) {
+        onProgress({
+          status: 'Lendo arquivo...',
+          progress: 0,
+          processedLines: 0,
+          totalLines: 0,
+          currentFile: stats.fileName
+        });
+      }
+
+      // Leitura do conteúdo do arquivo
+      const fileContent = await FileSystem.readAsStringAsync(asset.uri, {
+        encoding: FileSystem.EncodingType.UTF8,
+      });
+
+      const lines = fileContent.split(/\r\n|\n|\r/); // Lida com diferentes quebras de linha
+      const totalLines = lines.filter(line => line.trim()).length; // Apenas linhas não vazias
+      console.log(`IMPORT_SERVICE: Arquivo de motivos lido com ${lines.length} linhas (${totalLines} não vazias)`);
+
+      if (onProgress) {
+        onProgress({
+          status: 'Processando motivos...',
+          progress: 0,
+          processedLines: 0,
+          totalLines,
+          currentFile: stats.fileName
+        });
+      }
+
+      const reasonsCollection = database.get('reasons');
+      let processedCount = 0;
+
+      // Processamento das linhas dentro de uma transação do WatermelonDB
+      await database.write(async () => {
+        for (let i = 0; i < lines.length; i++) {
+          // Verificar cancelamento
+          if (cancelToken.cancelled) {
+            stats.cancelled = true;
+            console.log('IMPORT_SERVICE: Importação de motivos cancelada pelo usuário');
+            break;
+          }
+
+          const line = lines[i];
+          const lineNumber = i + 1;
+
+          // Pular linhas vazias
+          if (!line.trim()) {
+            continue;
+          }
+
+          try {
+            const processResult = await this.processReasonLine(
+              line,
+              lineNumber,
+              processedReasonCodesInFile,
+              reasonsCollection
+            );
+            
+            if (processResult.success) {
+              if (processResult.action === 'inserted') {
+                stats.inserted++;
+                processedCount++;
+              } else if (processResult.action === 'updated') {
+                stats.updated++;
+                processedCount++;
+              } else if (processResult.action === 'skipped_header') {
+                // Cabeçalho pulado - não conta nas estatísticas
+                continue;
+              }
+            } else {
+              stats.errors.push({
+                lineNumber,
+                lineContent: line,
+                error: processResult.error
+              });
+              processedCount++;
+            }
+
+            // Callback de progresso a cada 10 linhas ou na última linha
+            if (onProgress && (processedCount % 10 === 0 || processedCount === totalLines)) {
+              const progress = totalLines > 0 ? processedCount / totalLines : 0;
+              onProgress({
+                status: `Processando linha ${processedCount} de ${totalLines}...`,
+                progress,
+                processedLines: processedCount,
+                totalLines,
+                currentFile: stats.fileName
+              });
+            }
+
+          } catch (lineError) {
+            console.error(`IMPORT_SERVICE: Erro ao processar linha de motivo ${lineNumber}:`, lineError);
+            stats.errors.push({
+              lineNumber,
+              lineContent: line,
+              error: `Erro interno ao processar linha: ${lineError.message}`
+            });
+            processedCount++;
+          }
+        }
+      });
+
+      // Callback final
+      if (onProgress && !stats.cancelled) {
+        onProgress({
+          status: 'Importação de motivos concluída!',
+          progress: 1,
+          processedLines: processedCount,
+          totalLines,
+          currentFile: stats.fileName
+        });
+      }
+
+      return stats;
+
+    } catch (error) {
+      console.error('IMPORT_SERVICE: Erro durante processamento do arquivo de motivos:', error);
+      stats.errors.push({
+        lineNumber: 0,
+        lineContent: '',
+        error: `Erro geral no processamento: ${error.message}`
+      });
+      
+      if (onProgress) {
+        onProgress({
+          status: `Erro: ${error.message}`,
+          progress: 0,
+          processedLines: 0,
+          totalLines: 0,
+          currentFile: stats.fileName,
+          hasError: true
+        });
+      }
+      
+      return stats;
+    }
+  }
+
+  /**
+   * Permite ao usuário selecionar arquivo CSV para importação de motivos
+   * @returns {Promise<Object|null>} - Asset do arquivo ou null se cancelado
+   */
+  async selectReasonImportFile() {
+    try {
+      console.log('IMPORT_SERVICE: Iniciando seleção de arquivo CSV para importação de motivos...');
+      
+      const pickerResult = await DocumentPicker.getDocumentAsync({
+        type: ['text/csv', 'text/comma-separated-values', 'application/csv'],
+        copyToCacheDirectory: true,
+        multiple: false,
+      });
+
+      // Verificar se a seleção foi cancelada
+      if (pickerResult.canceled === true || !pickerResult.assets || pickerResult.assets.length === 0) {
+        console.log('IMPORT_SERVICE: Seleção de arquivo CSV cancelada');
+        return null;
+      }
+
+      const asset = pickerResult.assets[0];
+      
+      // Validação específica para CSV
+      if (!asset.uri) {
+        throw new Error('URI do arquivo não encontrado.');
+      }
+
+      if (!asset.name.toLowerCase().endsWith('.csv')) {
+        throw new Error('Formato de arquivo não suportado. Use apenas arquivos .csv');
+      }
+
+      if (asset.size && asset.size > this.maxFileSize) {
+        throw new Error(`Arquivo muito grande. Tamanho máximo: ${this.maxFileSize / 1024 / 1024}MB`);
+      }
+
+      console.log(`IMPORT_SERVICE: Arquivo CSV selecionado: ${asset.name || 'motivos.csv'}`);
+      return asset;
+      
+    } catch (error) {
+      console.error('IMPORT_SERVICE: Erro na seleção de arquivo CSV:', error);
+      throw new Error(`Falha na seleção do arquivo: ${error.message}`);
+    }
+  }
+
+  /**
+   * Função principal para importação de motivos
+   * @param {Function} onProgress - Callback para progresso (opcional)
+   * @param {Object} cancelToken - Token para cancelamento (opcional)
+   * @returns {Promise<Object>} - Estatísticas da importação
+   */
+  async importReasons(onProgress = null, cancelToken = { cancelled: false }) {
+    try {
+      console.log('IMPORT_SERVICE: Iniciando importação de motivos...');
+
+      if (onProgress) {
+        onProgress({
+          status: 'Selecionando arquivo CSV...',
+          progress: 0,
+          processedLines: 0,
+          totalLines: 0,
+          currentFile: ''
+        });
+      }
+
+      // Verificar cancelamento
+      if (cancelToken.cancelled) {
+        return {
+          success: false,
+          message: 'Importação cancelada pelo usuário.',
+          stats: { inserted: 0, updated: 0, errors: [], cancelled: true }
+        };
+      }
+
+      // Seleção do arquivo
+      const asset = await this.selectReasonImportFile();
+      if (!asset) {
+        return {
+          success: false,
+          message: 'Importação cancelada pelo usuário.',
+          stats: { inserted: 0, updated: 0, errors: [] }
+        };
+      }
+
+      // Processamento do arquivo
+      const stats = await this.processReasonFile(asset, onProgress, cancelToken);
+
+      // Verificar se foi cancelado
+      if (stats.cancelled) {
+        return {
+          success: false,
+          message: 'Importação cancelada pelo usuário.',
+          stats
+        };
+      }
+
+      // Registrar importação na tabela imports se houve inserções ou atualizações
+      if (stats.inserted > 0 || stats.updated > 0) {
+        try {
+          await database.write(async () => {
+            const importsCollection = database.get('imports');
+            await importsCollection.create(importRecord => {
+              importRecord.fileName = stats.fileName;
+              importRecord.importDate = Date.now();
+              importRecord.itemsInserted = stats.inserted;
+              importRecord.itemsUpdated = stats.updated;
+              importRecord.source = 'reasons_csv_import';
+            });
+          });
+          console.log('IMPORT_SERVICE: Registro de importação de motivos salvo');
+        } catch (error) {
+          console.error('IMPORT_SERVICE: Erro ao salvar registro de importação:', error);
+        }
+      }
+
+      // Log das estatísticas finais
+      console.log('IMPORT_SERVICE: Importação de motivos concluída');
+      console.log('IMPORT_SERVICE: Estatísticas da Importação de Motivos:', {
+        inserted: stats.inserted,
+        updated: stats.updated,
+        errorsCount: stats.errors.length,
+        totalProcessed: stats.inserted + stats.updated + stats.errors.length
+      });
+
+      // Não exibir resultados se temos callback de progresso (será tratado pela UI)
+      if (!onProgress) {
+        this.showImportResults(stats);
+      }
+
+      return {
+        success: true,
+        message: 'Importação de motivos concluída com sucesso.',
+        stats
+      };
+
+    } catch (error) {
+      console.error('IMPORT_SERVICE: Erro na importação de motivos:', error);
+      
+      if (onProgress) {
+        onProgress({
+          status: `Erro: ${error.message}`,
+          progress: 0,
+          processedLines: 0,
+          totalLines: 0,
+          currentFile: '',
+          hasError: true
+        });
+      }
+
+      return {
+        success: false,
+        message: `Erro na importação: ${error.message}`,
+        stats: {
+          inserted: 0,
+          updated: 0,
+          errors: [{ lineNumber: 0, lineContent: '', error: error.message }]
+        }
+      };
+    }
+  }
 }
 
 // Exportar instância singleton (mesmo padrão do ExportService)

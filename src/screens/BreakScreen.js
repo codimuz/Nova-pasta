@@ -10,8 +10,8 @@ import {
   FAB,
   Portal,
   Headline,
+  TextInput,
 } from 'react-native-paper';
-import QuantityInput from '../components/forms/QuantityInput';
 import { exportService } from '../services/ExportService';
 import { importService } from '../services/ImportService';
 import ImportProgressDialog from '../components/dialogs/ImportProgressDialog';
@@ -106,7 +106,7 @@ function BreakScreen() {
   const [selectedMotive, setSelectedMotive] = useState();
   const [loading, setLoading] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
-  const [quantity, setQuantity] = useState({ value: '', unit: 'UN' });
+  const [quantity, setQuantity] = useState('');
   const [fabOpen, setFabOpen] = useState(false);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const refDropdown1 = useRef(null);
@@ -251,9 +251,9 @@ function BreakScreen() {
       await database.write(async () => {
         const selectedReason = await reasonsCollection.find(selectedMotive);
         
-        // Usa os valores já validados e formatados do QuantityInput
-        const { value: quantityValue, unit: chosenUnitType } = quantity;
-        const numericQuantity = parseFloat(quantityValue);
+        // Converte a quantidade para número
+        const numericQuantity = parseFloat(quantity) || 0;
+        const chosenUnitType = selectedProduct?.unitType || 'UN';
 
         const newEntry = await entriesCollection.create(entry => {
           entry.productCodeValue = selectedProduct.productCode;
@@ -338,12 +338,12 @@ function BreakScreen() {
           />
 
           {/* Seção de Quantidade */}
-          <QuantityInput
+          <TextInput
             label="Quantidade *"
             mode="outlined"
             value={quantity}
             onChangeText={setQuantity}
-            initialUnitType={selectedProduct?.unitType || 'UN'}
+            keyboardType="numeric"
             style={styles.input}
           />
 

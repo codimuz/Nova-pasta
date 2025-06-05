@@ -1,0 +1,51 @@
+code,description
+01,Produto Vencido
+02,Embalagem Danificada
+03,Avaria no Manuseio
+04,Furto Interno
+05,Furto Externo
+06,Perda Não Identificada
+07,Devolução de Cliente (com defeito)
+08,Ajuste de Inventário (Sobra)
+09,Ajuste de Inventário (Falta)
+10,Consumo Interno da Loja
+11,Uso para Degustação ou Demonstração
+12,Produto Próximo ao Vencimento
+13,Recall do Fornecedor
+14,Erro de Lançamento no Recebimento
+15,Erro de Cadastro (Código errado)
+16,Produto Não Conforme (Qualidade)
+17,Transferência para Outra Filial
+18,Devolução ao Centro de Distribuição
+19,Quebra por falha na refrigeração
+20,Produto Amassado
+21,Doação
+22,Brinde para Cliente
+23,Avaria no Transporte
+24,Produto com Selo Violado
+25,Descarte por Contaminação
+26,Quebra Operacional (caixa)
+27,Erro de Precificação (retirada)
+28,Amostra para Análise Laboratorial
+29,Produto Obsoleto
+30,Divergência na Contagem Cíclica
+31,Perda por Pragas
+32,Item de Exposição (descarte)
+33,Erro de Pedido (compra errada)
+34,Vazamento de Líquido
+35,Dano por Umidade
+36,Produto Queimado ou Tostado
+37,Uso em Treinamento de Funcionários
+38,Transferência para Central de Perdas
+39,Devolução de Cliente (sem defeito)
+40,Produto Incompleto
+41,Roubo de Carga
+42,Ajuste Fiscal
+43,Bonificação não cadastrada
+44,Divergência de Peso (Balança)
+45,Produto sem Etiqueta de Preço
+46,Dano por Queda de Gôndola
+47,Uso para Produção Interna (Padaria/Rotisseria)
+48,Descarte por Ordem Sanitária
+49,Erro na Separação de Pedido Online
+50,Ajuste de Estoque Inicial
