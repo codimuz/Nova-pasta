@@ -536,7 +536,13 @@ const HomeScreen = () => {
 
       {renderStatusBanner()}
 
-      <View style={styles.content}>
+      <ScrollView 
+        style={styles.content}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="always"
+        showsVerticalScrollIndicator={false}
+        nestedScrollEnabled={true}
+      >
         <Menu
           visible={showReasonMenu}
           onDismiss={() => setShowReasonMenu(false)}
@@ -588,7 +594,7 @@ const HomeScreen = () => {
             Salvar
           </Button>
         </View>
-      </View>
+      </ScrollView>
       
       <FAB.Group
         open={fabOpen}
@@ -625,6 +631,8 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+  },
+  scrollContent: {
     padding: 16,
     paddingBottom: 100, // Espaço para o FAB
   },

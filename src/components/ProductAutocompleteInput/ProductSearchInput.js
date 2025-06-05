@@ -8,6 +8,7 @@ import {
   TextInput,
   Chip,
   useTheme,
+  Portal,
 } from 'react-native-paper';
 
 import ProductSearchDropdown from './ProductSearchDropdown';
@@ -209,22 +210,24 @@ const ProductSearchInput = memo(({
           {...textInputProps}
         />
 
-        <ProductSearchDropdown
-          visible={showSuggestions && !disabled}
-          products={filteredProducts}
-          isSearching={isSearching}
-          searchError={searchError}
-          noProductsFound={noProductsFound}
-          searchTerm={code}
-          onProductSelect={handleProductSelectFromDropdown}
-          onRefresh={showRefreshButton ? handleRefresh : undefined}
-          onLoadMore={loadMoreProducts}
-          canLoadMore={canLoadMore}
-          maxHeight={dropdownMaxHeight}
-          highlightSearchTerm={highlightSearchTerm}
-          loadedCount={loadedCount}
-          totalResults={totalResults}
-        />
+        <Portal>
+          <ProductSearchDropdown
+            visible={showSuggestions && !disabled}
+            products={filteredProducts}
+            isSearching={isSearching}
+            searchError={searchError}
+            noProductsFound={noProductsFound}
+            searchTerm={code}
+            onProductSelect={handleProductSelectFromDropdown}
+            onRefresh={showRefreshButton ? handleRefresh : undefined}
+            onLoadMore={loadMoreProducts}
+            canLoadMore={canLoadMore}
+            maxHeight={dropdownMaxHeight}
+            highlightSearchTerm={highlightSearchTerm}
+            loadedCount={loadedCount}
+            totalResults={totalResults}
+          />
+        </Portal>
       </View>
     );
   }, [

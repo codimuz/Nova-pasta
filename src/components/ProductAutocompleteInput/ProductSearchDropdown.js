@@ -1,10 +1,11 @@
-import React, { memo, useCallback, useMemo, useState } from 'react';
+import React, { memo, useCallback, useMemo, useState, useRef, useEffect } from 'react';
 import {
   View,
   StyleSheet,
   FlatList,
   Dimensions,
   Platform,
+  Modal,
 } from 'react-native';
 import {
   List,
@@ -86,7 +87,10 @@ const ProductSearchDropdown = memo(({
     );
     
     if (__DEV__) {
-      console.log('ProductSearchDropdown: Cálculo de altura:', {
+      const expectedContentHeight = products.length * ITEM_HEIGHT;
+      const shouldScroll = expectedContentHeight > finalHeight;
+      
+      console.log('ProductSearchDropdown: Cálculo de altura DETALHADO:', {
         products: products.length,
         screenHeight,
         maxScreenHeight,
@@ -94,6 +98,10 @@ const ProductSearchDropdown = memo(({
         visibleItems,
         idealHeight,
         finalHeight,
+        ITEM_HEIGHT,
+        expectedContentHeight,
+        shouldScroll,
+        scrollMath: `${expectedContentHeight}px (conteúdo) > ${finalHeight}px (container) = ${shouldScroll ? 'DEVE ROLAR' : 'NÃO DEVE ROLAR'}`
       });
     }
     
@@ -350,22 +358,29 @@ const ProductSearchDropdown = memo(({
   }
 
   return (
-    <View 
-      style={[styles.container, { height: calculateOptimalHeight }]}
-      pointerEvents="box-none" // Permite que toques passem através quando necessário
+    <Modal
+      visible={visible}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={onClose}
     >
-      <Surface
-        elevation={8}
-        style={[
-          styles.surface,
-          {
-            backgroundColor: theme.colors.surface,
-            borderColor: theme.colors.outline,
-            flex: 1,
-          }
-        ]}
-        pointerEvents="auto" // Garante que a Surface capture eventos de toque
-      >
+      <View style={styles.modalOverlay}>
+        <View 
+          style={[styles.portalContainer, { height: calculateOptimalHeight }]}
+          pointerEvents="box-none"
+        >
+          <Surface
+            elevation={8}
+            style={[
+              styles.portalSurface,
+              {
+                backgroundColor: theme.colors.surface,
+                borderColor: theme.colors.outline,
+                flex: 1,
+              }
+            ]}
+            pointerEvents="auto"
+          >
         {/* Estados especiais: loading, erro, sem resultados */}
         {isSearching && (
           <View style={styles.stateContainer}>
@@ -438,8 +453,10 @@ const ProductSearchDropdown = memo(({
             </Button>
           </View>
         )}
-      </Surface>
-    </View>
+          </Surface>
+        </View>
+      </View>
+    </Modal>
   );
 });
 
@@ -541,6 +558,37 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 235, 59, 0.3)', // Amarelo claro para destaque
     borderRadius: 2,
     paddingHorizontal: 2,
+  },
+  // Estilos para Modal/Portal
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    paddingTop: 100, // Espaço aproximado do topo da tela até o campo de busca
+    paddingHorizontal: 16,
+  },
+  portalContainer: {
+    width: '100%',
+    maxWidth: 400,
+    minHeight: ITEM_HEIGHT * 2,
+  },
+  portalSurface: {
+    borderRadius: 8,
+    borderWidth: 1,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: {
+          width: 0,
+          height: 8,
+        },
+        shadowOpacity: 0.44,
+        shadowRadius: 10.32,
+      },
+      android: {
+        elevation: 16,
+      },
+    }),
   },
 });
 
