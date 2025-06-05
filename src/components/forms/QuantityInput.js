@@ -1,13 +1,11 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { TextInput, HelperText } from 'react-native-paper';
-import TextInputMask from 'react-native-text-input-mask';
 
 const QuantityInput = ({ value, onChangeText, initialUnitType = 'UN', label, mode = "outlined", style, error, ...props }) => {
   const [unitType, setUnitType] = useState(initialUnitType);
   const [displayValue, setDisplayValue] = useState('');
   const [validationError, setValidationError] = useState('');
-  const inputRef = useRef(null);
 
   const validateValue = (text) => {
     if (!text) return { isValid: true, error: '' };
@@ -29,24 +27,54 @@ const QuantityInput = ({ value, onChangeText, initialUnitType = 'UN', label, mod
     return { isValid: true, error: '' };
   };
 
-  const handleChange = useCallback((formatted, extracted) => {
-    // O valor extraído já vem limpo da máscara
-    const cleanValue = extracted || '';
+  const formatValue = (text) => {
+    // Remove caracteres inválidos
+    const cleanText = text.replace(/[^\d.]/g, '');
     
-    // Validação básica
-    const validation = validateValue(cleanValue);
-    setValidationError(validation.error);
+    if (!cleanText) return '';
 
-    // Atualiza valor de exibição com formatação
-    setDisplayValue(formatted || '');
-    
-    // Notifica mudança com valor limpo e unidade
-    if (validation.isValid) {
-      onChangeText({
-        value: cleanValue || '0',
-        unit: unitType,
-        chosen_unit_type: unitType // Para compatibilidade com ExportService
-      });
+    // Previne múltiplos pontos
+    const parts = cleanText.split('.');
+    if (parts.length > 2) {
+      return displayValue;
+    }
+
+    if (unitType === 'KG') {
+      // Para KG, permite decimais
+      if (parts.length === 2) {
+        // Tem ponto decimal
+        const intPart = parts[0].slice(0, 4); // Máximo 4 dígitos
+        const decPart = parts[1].slice(0, 2); // Máximo 2 decimais
+        if (decPart) {
+          return `${intPart}.${decPart}`;
+        }
+        return `${intPart}.`;
+      }
+      // Sem ponto decimal
+      return parts[0].slice(0, 4);
+    } else {
+      // Para UN, apenas inteiros
+      return parts[0].slice(0, 4);
+    }
+  };
+
+  const handleChange = useCallback((text) => {
+    const formatted = formatValue(text);
+    if (formatted !== undefined) {
+      setDisplayValue(formatted);
+
+      // Validação básica
+      const validation = validateValue(formatted);
+      setValidationError(validation.error);
+
+      // Notifica mudança com valor e unidade
+      if (validation.isValid) {
+        onChangeText({
+          value: formatted || '0',
+          unit: unitType,
+          chosen_unit_type: unitType
+        });
+      }
     }
   }, [unitType, onChangeText]);
 
@@ -61,8 +89,7 @@ const QuantityInput = ({ value, onChangeText, initialUnitType = 'UN', label, mod
       return;
     }
 
-    const number = parseFloat(displayValue.replace(/[^\d.]/g, ''));
-    
+    const number = parseFloat(displayValue);
     if (!isNaN(number)) {
       const formatted = unitType === 'KG' ? 
         number.toFixed(2) :
@@ -82,7 +109,7 @@ const QuantityInput = ({ value, onChangeText, initialUnitType = 'UN', label, mod
     setUnitType(newType);
 
     if (displayValue) {
-      const number = parseFloat(displayValue.replace(/[^\d.]/g, ''));
+      const number = parseFloat(displayValue);
       if (!isNaN(number)) {
         const newValue = newType === 'KG' ? 
           number.toFixed(2) :
@@ -104,18 +131,11 @@ const QuantityInput = ({ value, onChangeText, initialUnitType = 'UN', label, mod
         label={label || 'Quantidade'}
         mode={mode}
         value={displayValue}
+        onChangeText={handleChange}
         onBlur={handleBlur}
+        keyboardType="decimal-pad"
         error={Boolean(validationError) || error}
         style={[styles.input, style]}
-        render={props => (
-          <TextInputMask
-            {...props}
-            ref={inputRef}
-            mask={unitType === 'KG' ? '[9999].[99]' : '[9999]'}
-            onChangeText={handleChange}
-            keyboardType="decimal-pad"
-          />
-        )}
         right={
           <TextInput.Icon
             icon={unitType === 'KG' ? 'scale' : 'numeric'}
