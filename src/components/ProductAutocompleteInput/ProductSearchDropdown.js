@@ -49,19 +49,37 @@ const ProductSearchDropdown = memo(({
   const theme = useTheme();
   
   /**
-   * Calcula altura dinâmica baseada no conteúdo
+   * Calcula altura dinâmica baseada no conteúdo - otimizada para rolagem
    */
   const calculateOptimalHeight = useMemo(() => {
-    const maxItems = Math.floor((screenHeight * 0.5) / ITEM_HEIGHT);
-    const actualItems = Math.min(products.length, maxItems);
-    const calculatedHeight = Math.min(
-      actualItems * ITEM_HEIGHT + 32, // padding extra para header/footer
-      screenHeight * 0.6 // máximo 60% da tela
-    );
-    const finalHeight = Math.max(calculatedHeight, ITEM_HEIGHT * 2); // mínimo 2 itens
+    // Se maxHeight foi fornecido explicitamente, usar ele
+    if (maxHeight) {
+      return maxHeight;
+    }
+
+    // Calcular altura baseada no número de itens e estado atual
+    const headerFooterPadding = 40; // Espaço para headers/footers/padding
+    const maxScreenHeight = screenHeight * 0.6; // Máximo 60% da tela
+    const minDropdownHeight = ITEM_HEIGHT * 2.5; // Mínimo para mostrar pelo menos 2 itens completos
     
-    return maxHeight || finalHeight;
-  }, [products.length, screenHeight, maxHeight]);
+    // Se estiver carregando, erro ou sem resultados, usar altura mínima
+    if (isSearching || searchError || noProductsFound || products.length === 0) {
+      return Math.min(minDropdownHeight, maxScreenHeight);
+    }
+    
+    // Calcular altura ideal baseada no número de produtos
+    const maxVisibleItems = Math.floor((maxScreenHeight - headerFooterPadding) / ITEM_HEIGHT);
+    const visibleItems = Math.min(products.length, maxVisibleItems);
+    const idealHeight = (visibleItems * ITEM_HEIGHT) + headerFooterPadding;
+    
+    // Garantir que a altura esteja dentro dos limites
+    const finalHeight = Math.max(
+      Math.min(idealHeight, maxScreenHeight),
+      minDropdownHeight
+    );
+    
+    return finalHeight;
+  }, [products.length, screenHeight, maxHeight, isSearching, searchError, noProductsFound]);
 
   /**
    * Função para carregar mais itens (lazy loading)
@@ -353,6 +371,13 @@ const ProductSearchDropdown = memo(({
             ItemSeparatorComponent={renderItemSeparator}
             style={styles.flatList}
             contentContainerStyle={styles.flatListContent}
+            // Melhorias para experiência de rolagem
+            scrollEventThrottle={16}
+            decelerationRate="normal"
+            bounces={true}
+            alwaysBounceVertical={false}
+            overScrollMode="auto"
+            // Acessibilidade
             accessibilityLabel={`Lista de produtos com ${products.length} de ${totalResults} resultados`}
             accessibilityHint="Role para ver mais produtos ou use gestos para navegar"
             accessible={true}
@@ -410,7 +435,8 @@ const styles = StyleSheet.create({
   surface: {
     borderRadius: 8,
     borderWidth: 1,
-    overflow: 'hidden', // Garante que o conteúdo respeite o borderRadius
+    // REMOVIDO overflow: 'hidden' para permitir rolagem adequada do conteúdo interno
+    // O borderRadius ainda será respeitado pelos elementos filhos
     // Sombras mais pronunciadas para melhor hierarquia visual
     ...Platform.select({
       ios: {
