@@ -27,6 +27,10 @@ const useProductSearch = (onProductSelect, options = {}) => {
   const [noProductsFound, setNoProductsFound] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
 
+  // Estados para paginação e performance
+  const [loadedCount, setLoadedCount] = useState(maxSuggestions);
+  const [allResults, setAllResults] = useState([]);
+
   // Refs para controle
   const debounceTimeoutRef = useRef(null);
   const lastSearchRef = useRef('');
@@ -182,7 +186,7 @@ const useProductSearch = (onProductSelect, options = {}) => {
       // Salvar no cache
       if (cacheResults) {
         cacheRef.current.set(trimmedTerm, {
-          data: limitedResults,
+          data: finalResults, // Salvar todos os resultados no cache
           timestamp: Date.now()
         });
         
@@ -193,12 +197,15 @@ const useProductSearch = (onProductSelect, options = {}) => {
         }
       }
 
-      setFilteredProducts(limitedResults);
+      // Gerenciar paginação
+      setAllResults(finalResults);
+      setLoadedCount(Math.min(maxSuggestions, finalResults.length));
+      setFilteredProducts(finalResults.slice(0, Math.min(maxSuggestions, finalResults.length)));
       setShowSuggestions(true);
-      setNoProductsFound(limitedResults.length === 0);
+      setNoProductsFound(finalResults.length === 0);
       
-      console.log(`useProductSearch: Busca por "${trimmedTerm}" retornou ${limitedResults.length} resultados`);
-      return limitedResults;
+      console.log(`useProductSearch: Busca por "${trimmedTerm}" retornou ${finalResults.length} resultados (${Math.min(maxSuggestions, finalResults.length)} carregados inicialmente)`);
+      return finalResults;
 
     } catch (error) {
       if (error.name !== 'AbortError') {
@@ -302,6 +309,8 @@ const useProductSearch = (onProductSelect, options = {}) => {
     setCode('');
     setSelectedProduct(null);
     setFilteredProducts([]);
+    setAllResults([]);
+    setLoadedCount(maxSuggestions);
     setShowSuggestions(false);
     setNoProductsFound(false);
     setSearchError(null);
@@ -321,7 +330,7 @@ const useProductSearch = (onProductSelect, options = {}) => {
     if (onProductSelect) {
       onProductSelect(null);
     }
-  }, [onProductSelect]);
+  }, [onProductSelect, maxSuggestions]);
 
   /**
    * Função para focar no campo com controle de sugestões
@@ -373,25 +382,42 @@ const useProductSearch = (onProductSelect, options = {}) => {
     }
   }, [code, minChars, searchProducts]);
 
+  /**
+   * Função para carregar mais produtos (lazy loading)
+   */
+  const loadMoreProducts = useCallback(() => {
+    if (allResults.length > loadedCount) {
+      const newCount = Math.min(loadedCount + 10, allResults.length);
+      setLoadedCount(newCount);
+      setFilteredProducts(allResults.slice(0, newCount));
+      console.log(`useProductSearch: Carregados ${newCount} de ${allResults.length} produtos`);
+    }
+  }, [allResults, loadedCount]);
+
   // Propriedades computadas
-  const displayedProducts = useMemo(() => 
-    filteredProducts.slice(0, maxSuggestions), 
-    [filteredProducts, maxSuggestions]
+  const displayedProducts = useMemo(() =>
+    filteredProducts,
+    [filteredProducts]
   );
 
-  const hasResults = useMemo(() => 
-    displayedProducts.length > 0, 
+  const hasResults = useMemo(() =>
+    displayedProducts.length > 0,
     [displayedProducts.length]
   );
 
-  const minimumCharsReached = useMemo(() => 
-    code.trim().length >= minChars, 
+  const minimumCharsReached = useMemo(() =>
+    code.trim().length >= minChars,
     [code, minChars]
   );
 
-  const shouldShowMessage = useMemo(() => 
-    code.trim().length >= minChars && (noProductsFound || searchError), 
+  const shouldShowMessage = useMemo(() =>
+    code.trim().length >= minChars && (noProductsFound || searchError),
     [code, minChars, noProductsFound, searchError]
+  );
+
+  const canLoadMore = useMemo(() =>
+    allResults.length > loadedCount,
+    [allResults.length, loadedCount]
   );
 
   // Cleanup ao desmontar
@@ -428,15 +454,19 @@ const useProductSearch = (onProductSelect, options = {}) => {
     highlightText,
     clearCache,
     forceRefresh,
+    loadMoreProducts,
     
     // Propriedades computadas
     minimumCharsReached,
     hasResults,
     shouldShowMessage,
+    canLoadMore,
     
-    // Informações de debug
+    // Informações de debug e paginação
     cacheSize: cacheRef.current.size,
     lastSearch: lastSearchRef.current,
+    loadedCount,
+    totalResults: allResults.length,
   };
 };
 

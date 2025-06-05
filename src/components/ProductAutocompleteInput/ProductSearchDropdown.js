@@ -1,8 +1,8 @@
-import React, { memo, useCallback, useMemo } from 'react';
+import React, { memo, useCallback, useMemo, useState } from 'react';
 import {
   View,
   StyleSheet,
-  ScrollView,
+  FlatList,
   Dimensions,
   Platform,
 } from 'react-native';
@@ -15,12 +15,19 @@ import {
   Divider,
   useTheme,
 } from 'react-native-paper';
+import ProductItem from './components/ProductItem';
 
-const { height: screenHeight } = Dimensions.get('window');
+const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
+
+// Constantes de performance
+const ITEM_HEIGHT = 72;
+const INITIAL_NUM_TO_RENDER = 8;
+const MAX_TO_RENDER_PER_BATCH = 5;
+const WINDOW_SIZE = 10;
 
 /**
  * Componente de dropdown otimizado para busca de produtos
- * Implementa virtualização, highlight de texto e estados de loading/erro
+ * Implementa FlatList virtualizada, altura dinâmica e lazy loading
  */
 const ProductSearchDropdown = memo(({
   visible,
@@ -31,11 +38,39 @@ const ProductSearchDropdown = memo(({
   searchTerm = '',
   onProductSelect,
   onRefresh,
+  onLoadMore,
   onClose,
-  maxHeight = Math.min(screenHeight * 0.6, screenHeight - 200),
+  maxHeight,
   highlightSearchTerm = true,
+  canLoadMore = false,
+  loadedCount = 0,
+  totalResults = 0,
 }) => {
   const theme = useTheme();
+  
+  /**
+   * Calcula altura dinâmica baseada no conteúdo
+   */
+  const calculateOptimalHeight = useMemo(() => {
+    const maxItems = Math.floor((screenHeight * 0.5) / ITEM_HEIGHT);
+    const actualItems = Math.min(products.length, maxItems);
+    const calculatedHeight = Math.min(
+      actualItems * ITEM_HEIGHT + 32, // padding extra para header/footer
+      screenHeight * 0.6 // máximo 60% da tela
+    );
+    const finalHeight = Math.max(calculatedHeight, ITEM_HEIGHT * 2); // mínimo 2 itens
+    
+    return maxHeight || finalHeight;
+  }, [products.length, screenHeight, maxHeight]);
+
+  /**
+   * Função para carregar mais itens (lazy loading)
+   */
+  const handleLoadMore = useCallback(() => {
+    if (canLoadMore && !isSearching && onLoadMore) {
+      onLoadMore();
+    }
+  }, [canLoadMore, isSearching, onLoadMore]);
 
   /**
    * Destaca o termo de busca no texto
@@ -183,91 +218,76 @@ const ProductSearchDropdown = memo(({
   ), [searchTerm, theme, handleRefresh]);
 
   /**
-   * Renderiza um item de produto
+   * Renderiza um item otimizado da lista
    */
-  const renderProductItem = useCallback((product) => {
-    // Função auxiliar para formatar preço de forma robusta
-    const formatPrice = (product) => {
-      // Tentar diferentes campos de preço para máxima compatibilidade
-      const priceValue = product.price || product.regular_price || product.club_price || 0;
-      
-      // Converter para número se for string
-      const numPrice = typeof priceValue === 'string' ? parseFloat(priceValue) : priceValue;
-      
-      // Verificar se é um número válido
-      if (isNaN(numPrice) || numPrice <= 0) {
-        return 'Preço não disponível';
-      }
-      
-      return `R$ ${numPrice.toFixed(2)}`;
-    };
-
-    const price = formatPrice(product);
-    const description = `${product.product_code} • ${product.unit_type || 'UN'} • ${price}`;
-    
-    // Calcula a opacidade baseada no score de relevância
-    const opacity = product.searchScore ? Math.max(0.7, product.searchScore) : 1;
-    
-    // Determina o ícone baseado na relevância
-    const getRelevanceIcon = () => {
-      if (!product.searchScore) return null;
-      if (product.searchScore > 0.8) return "check-circle";
-      if (product.searchScore > 0.5) return "check-circle-outline";
-      return "help-circle-outline";
-    };
-
+  const renderProductItem = useCallback(({ item, index }) => {
     return (
-      <List.Item
-        key={product.product_code}
-        title={renderHighlightedText(product.product_name, searchTerm)}
-        description={renderHighlightedText(description, searchTerm)}
-        titleNumberOfLines={2}
-        descriptionNumberOfLines={1}
-        titleEllipsizeMode="tail"
-        descriptionEllipsizeMode="tail"
-        left={() => <List.Icon icon="package-variant" color={theme.colors.primary} />}
-        right={() => (
-          <View style={styles.relevanceContainer}>
-            {getRelevanceIcon() && (
-              <List.Icon
-                icon={getRelevanceIcon()}
-                color={theme.colors.primary}
-              />
-            )}
-            <List.Icon icon="chevron-right" color={theme.colors.outline} />
-          </View>
-        )}
-        onPress={() => handleProductSelect(product)}
-        style={[
-          styles.listItem,
-          {
-            backgroundColor: theme.colors.surface,
-            opacity,
-          }
-        ]}
-        titleStyle={{
-          color: theme.colors.onSurface,
-          fontWeight: product.searchScore > 0.8 ? '600' : '400',
-        }}
-        descriptionStyle={{ color: theme.colors.outline }}
-        accessibilityRole="button"
-        accessibilityLabel={`Selecionar produto ${product.product_name}, código ${product.product_code}, preço ${price}`}
-        accessibilityHint="Toque para selecionar este produto"
-        accessible={true}
+      <ProductItem
+        product={item}
+        searchTerm={searchTerm}
+        onSelect={handleProductSelect}
+        isLast={index === products.length - 1}
+        highlightSearchTerm={highlightSearchTerm}
       />
     );
-  }, [searchTerm, theme, handleProductSelect, renderHighlightedText]);
+  }, [searchTerm, handleProductSelect, products.length, highlightSearchTerm]);
 
   /**
-   * Renderiza a lista de produtos
+   * Otimização: função para layout dos itens
    */
-  const renderProductsList = useMemo(() => {
-    if (products.length === 0) {
-      return null;
+  const getItemLayout = useCallback((data, index) => ({
+    length: ITEM_HEIGHT,
+    offset: ITEM_HEIGHT * index,
+    index,
+  }), []);
+
+  /**
+   * Key extractor otimizado - garante keys únicas
+   */
+  const keyExtractor = useCallback((item, index) => {
+    // Usar product_code como base, mas garantir unicidade com index
+    return `product_${item.product_code || item.id || index}_${index}`;
+  }, []);
+
+  /**
+   * Renderiza footer com loading ou botão "carregar mais"
+   */
+  const renderListFooter = useCallback(() => {
+    if (isSearching) {
+      return (
+        <View style={styles.footerLoading}>
+          <ActivityIndicator size="small" color={theme.colors.primary} />
+          <Text style={[styles.footerText, { color: theme.colors.onSurface }]}>
+            Carregando...
+          </Text>
+        </View>
+      );
     }
 
-    return products.map(renderProductItem);
-  }, [products, renderProductItem]);
+    if (canLoadMore) {
+      return (
+        <View style={styles.footerContainer}>
+          <Button
+            mode="text"
+            onPress={handleLoadMore}
+            compact
+            textColor={theme.colors.primary}
+          >
+            Carregar mais ({totalResults - loadedCount} restantes)
+          </Button>
+        </View>
+      );
+    }
+
+    return null;
+  }, [isSearching, canLoadMore, theme, handleLoadMore, totalResults, loadedCount]);
+
+  /**
+   * Renderiza separator entre itens
+   */
+  const renderItemSeparator = useCallback(() => (
+    <View style={[styles.separator, { backgroundColor: theme.colors.outline }]} />
+  ), [theme]);
 
   // Não renderizar se não visível
   if (!visible) {
@@ -282,36 +302,62 @@ const ProductSearchDropdown = memo(({
   }
 
   return (
-    <View style={[styles.container, { maxHeight }]}>
-      <Surface 
-        elevation={8} 
+    <View style={[styles.container, { height: calculateOptimalHeight }]}>
+      <Surface
+        elevation={8}
         style={[
-          styles.surface, 
-          { 
+          styles.surface,
+          {
             backgroundColor: theme.colors.surface,
             borderColor: theme.colors.outline,
+            flex: 1,
           }
         ]}
       >
-        <ScrollView
-          style={styles.scrollView}
-          showsVerticalScrollIndicator={true}
-          keyboardShouldPersistTaps="handled"
-          nestedScrollEnabled={true}
-          contentContainerStyle={styles.scrollContent}
-        >
-          {/* Estado de carregamento */}
-          {isSearching && renderLoadingState}
+        {/* Estados especiais: loading, erro, sem resultados */}
+        {isSearching && (
+          <View style={styles.stateContainer}>
+            {renderLoadingState}
+          </View>
+        )}
 
-          {/* Estado de erro */}
-          {searchError && !isSearching && renderErrorState}
+        {searchError && !isSearching && (
+          <View style={styles.stateContainer}>
+            {renderErrorState}
+          </View>
+        )}
 
-          {/* Estado sem resultados */}
-          {noProductsFound && !isSearching && !searchError && renderNoResultsState}
+        {noProductsFound && !isSearching && !searchError && (
+          <View style={styles.stateContainer}>
+            {renderNoResultsState}
+          </View>
+        )}
 
-          {/* Lista de produtos */}
-          {!isSearching && !searchError && !noProductsFound && renderProductsList}
-        </ScrollView>
+        {/* Lista de produtos com FlatList otimizada */}
+        {!isSearching && !searchError && !noProductsFound && products.length > 0 && (
+          <FlatList
+            data={products}
+            renderItem={renderProductItem}
+            keyExtractor={keyExtractor}
+            getItemLayout={getItemLayout}
+            initialNumToRender={INITIAL_NUM_TO_RENDER}
+            maxToRenderPerBatch={MAX_TO_RENDER_PER_BATCH}
+            windowSize={WINDOW_SIZE}
+            removeClippedSubviews={true}
+            showsVerticalScrollIndicator={true}
+            keyboardShouldPersistTaps="handled"
+            nestedScrollEnabled={true}
+            onEndReached={handleLoadMore}
+            onEndReachedThreshold={0.1}
+            ListFooterComponent={renderListFooter}
+            ItemSeparatorComponent={renderItemSeparator}
+            style={styles.flatList}
+            contentContainerStyle={styles.flatListContent}
+            accessibilityLabel={`Lista de produtos com ${products.length} de ${totalResults} resultados`}
+            accessibilityHint="Role para ver mais produtos ou use gestos para navegar"
+            accessible={true}
+          />
+        )}
 
         {/* Botão de fechar se necessário */}
         {onClose && (
@@ -348,6 +394,7 @@ const styles = StyleSheet.create({
     zIndex: 999999,
     elevation: 999999, // Para Android
     marginTop: 4,
+    minHeight: ITEM_HEIGHT * 2, // Mínimo 2 itens
     // Garante que o dropdown fique sobre TODOS os elementos
     ...Platform.select({
       ios: {
@@ -380,27 +427,55 @@ const styles = StyleSheet.create({
       },
     }),
   },
-  scrollView: {
-    maxHeight: '100%',
-    flexGrow: 0,
+  stateContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    minHeight: ITEM_HEIGHT,
   },
-  scrollContent: {
-    flexGrow: 1,
-    paddingBottom: 8,
+  flatList: {
+    flex: 1,
+    maxHeight: '100%',
+  },
+  flatListContent: {
+    paddingVertical: 4,
+  },
+  separator: {
+    height: StyleSheet.hairlineWidth,
+    marginHorizontal: 16,
+  },
+  footerContainer: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+  },
+  footerLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  footerText: {
+    marginLeft: 8,
+    fontSize: 14,
   },
   listItem: {
     paddingVertical: 12,
     paddingHorizontal: 16,
-    minHeight: 64, // Touch target mínimo para acessibilidade
+    minHeight: ITEM_HEIGHT, // Touch target mínimo para acessibilidade
   },
   actionContainer: {
     paddingHorizontal: 8,
     paddingVertical: 4,
     alignItems: 'center',
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
   highlightedText: {
     fontWeight: 'bold',
     backgroundColor: 'rgba(255, 235, 59, 0.3)', // Amarelo claro para destaque
+    borderRadius: 2,
+    paddingHorizontal: 2,
   },
 });
 

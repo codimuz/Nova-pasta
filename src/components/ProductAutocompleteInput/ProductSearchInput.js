@@ -62,7 +62,11 @@ const ProductSearchInput = memo(({
     minimumCharsReached,
     hasResults,
     forceRefresh,
+    loadMoreProducts,
+    canLoadMore,
     cacheSize,
+    loadedCount,
+    totalResults,
   } = useProductSearch(onProductSelect, defaultSearchConfig);
 
   /**
@@ -214,8 +218,12 @@ const ProductSearchInput = memo(({
           searchTerm={code}
           onProductSelect={handleProductSelectFromDropdown}
           onRefresh={showRefreshButton ? handleRefresh : undefined}
+          onLoadMore={loadMoreProducts}
+          canLoadMore={canLoadMore}
           maxHeight={dropdownMaxHeight}
           highlightSearchTerm={highlightSearchTerm}
+          loadedCount={loadedCount}
+          totalResults={totalResults}
         />
       </View>
     );

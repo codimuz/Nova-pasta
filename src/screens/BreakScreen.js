@@ -536,11 +536,7 @@ const HomeScreen = () => {
 
       {renderStatusBanner()}
 
-      <ScrollView
-        style={[styles.content, { overflow: 'visible' }]}
-        contentContainerStyle={[styles.contentContainer, { overflow: 'visible' }]}
-        keyboardShouldPersistTaps="handled"
-      >
+      <View style={styles.content}>
         <Menu
           visible={showReasonMenu}
           onDismiss={() => setShowReasonMenu(false)}
@@ -592,7 +588,7 @@ const HomeScreen = () => {
             Salvar
           </Button>
         </View>
-      </ScrollView>
+      </View>
       
       <FAB.Group
         open={fabOpen}
@@ -629,11 +625,8 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    overflow: 'visible',
-  },
-  contentContainer: {
     padding: 16,
-    overflow: 'visible',
+    paddingBottom: 100, // Espaço para o FAB
   },
   loadingContainer: {
     flex: 1,
@@ -661,13 +654,14 @@ const styles = StyleSheet.create({
   searchContainer: {
     position: 'relative',
     marginBottom: 12,
-    zIndex: 999999,
+    zIndex: 1000,
+    minHeight: 56,
     ...Platform.select({
       ios: {
-        zIndex: 999999,
+        zIndex: 1000,
       },
       android: {
-        elevation: 999999,
+        elevation: 1000,
       },
     }),
   },
