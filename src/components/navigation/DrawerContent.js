@@ -80,7 +80,7 @@ const DrawerContent = (props) => {
           {/* Nova Rota para Registrar Quebra */}
           <Drawer.Item
             label="Registrar Quebra"
-            icon="alert-circle-plus-outline"
+            icon="plus-circle-outline"
             active={isActiveRoute('BreakEntry')}
             onPress={() => navigateToScreen('BreakEntry')}
             theme={{
