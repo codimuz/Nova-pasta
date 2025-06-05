@@ -52,7 +52,9 @@
     "@react-native-community/cli": "^14.1.2",
     "@types/lodash": "^4.17.17",
     "babel-plugin-module-resolver": "^5.0.2",
-    "jest": "^29.7.0"
+    "jest": "^29.7.0",
+    "typescript": "~5.8.3",
+    "@types/react": "~19.0.10"
   },
   "jest": {
     "preset": "react-native",

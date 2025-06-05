@@ -3,18 +3,6 @@ import { View, StyleSheet, TouchableOpacity, Text, FlatList, ScrollView } from '
 import { TextInput, Chip, Menu, List, ActivityIndicator, useTheme } from 'react-native-paper';
 import { ProductService } from '../../services/ProductService';
 
-// Dados mockados para teste
-const MOCK_PRODUCTS = [
-  { id: 1, productCode: '0000000001234', productName: 'Açúcar Cristal 1KG', regularPrice: 4.50, unitType: 'KG' },
-  { id: 2, productCode: '0000000005678', productName: 'Arroz Tipo 1 5KG', regularPrice: 22.90, unitType: 'KG' },
-  { id: 3, productCode: '0000000009012', productName: 'Feijão Preto 1KG', regularPrice: 8.75, unitType: 'KG' },
-  { id: 4, productCode: '0000000003456', productName: 'Leite Integral 1L', regularPrice: 5.20, unitType: 'UN' },
-  { id: 5, productCode: '0000000007890', productName: 'Óleo de Soja 900ml', regularPrice: 6.80, unitType: 'UN' },
-  { id: 6, productCode: '0000000004567', productName: 'Macarrão Espaguete 500g', regularPrice: 3.25, unitType: 'UN' },
-  { id: 7, productCode: '0000000008901', productName: 'Café Torrado Moído 500g', regularPrice: 12.90, unitType: 'UN' },
-  { id: 8, productCode: '0000000002345', productName: 'Farinha de Trigo 1KG', regularPrice: 4.20, unitType: 'KG' },
-];
-
 const ProductSearchChipInput = ({
   label = "Buscar Produtos",
   placeholder = "Digite o nome do produto",
@@ -33,21 +21,24 @@ const ProductSearchChipInput = ({
   const inputRef = useRef(null);
   const searchTimeout = useRef(null);
 
-  // Função de busca com dados mockados (pode ser substituída pela integração real)
+  // Instância do ProductService
+  const productService = useRef(new ProductService()).current;
+
+  // Função de busca integrada com ProductService
   const searchProducts = async (term) => {
     if (!term || term.length < 2) {
       return [];
     }
 
-    // Simular delay de API
-    await new Promise(resolve => setTimeout(resolve, 200));
-
-    const filteredProducts = MOCK_PRODUCTS.filter(product =>
-      product.productName.toLowerCase().includes(term.toLowerCase()) ||
-      product.productCode.includes(term)
-    ).slice(0, 5); // Limitar a 5 resultados
-
-    return filteredProducts;
+    try {
+      console.log(`ProductSearchChipInput: Buscando produtos com termo "${term}"`);
+      const results = await productService.searchProducts(term, { maxResults: 10 });
+      console.log(`ProductSearchChipInput: ${results.length} produtos encontrados`);
+      return results;
+    } catch (error) {
+      console.error('ProductSearchChipInput: Erro na busca de produtos:', error);
+      return [];
+    }
   };
 
   // Debounced search
@@ -175,7 +166,7 @@ const ProductSearchChipInput = ({
                     </Text>
                     <View style={[styles.priceContainer, { backgroundColor: theme.colors.secondaryContainer }]}>
                       <Text style={[styles.priceText, { color: theme.colors.onSecondaryContainer }]}>
-                        R$ {product.regularPrice.toFixed(2)}
+                        R$ {product.regularPrice?.toFixed(2) || '0.00'}
                       </Text>
                     </View>
                   </View>
@@ -238,18 +229,6 @@ const styles = StyleSheet.create({
   dropdownScroll: {
     maxHeight: 240, // Altura máxima da área scrollável
   },
-  dropdownHeader: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.1)',
-  },
-  dropdownHeaderText: {
-    fontSize: 12,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
   dropdownItem: {
     paddingVertical: 12,
     paddingHorizontal: 16,
@@ -306,6 +285,18 @@ const styles = StyleSheet.create({
   unitTypeText: {
     fontSize: 11,
     fontWeight: '600',
+  },
+  dropdownHeader: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.1)',
+  },
+  dropdownHeaderText: {
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
 });
 

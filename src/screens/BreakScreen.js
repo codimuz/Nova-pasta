@@ -241,7 +241,7 @@ function BreakScreen() {
   };
 
   const handleSave = async () => {
-    if (!selectedMotive || !selectedProduct || !quantity.value) {
+    if (!selectedMotive || !selectedProduct || !quantity) {
       alert('Por favor, preencha todos os campos obrigatórios.');
       return;
     }
@@ -265,9 +265,12 @@ function BreakScreen() {
           entry.isSynchronized = false;
         });
         
-        await newEntry.update(entry => {
-          entry.product.set(selectedProduct);
-          entry.reason.set(selectedReason);
+        // Os relacionamentos serão resolvidos pelos IDs já definidos acima
+        console.log('Quebra registrada:', {
+          productCode: selectedProduct.productCode,
+          productName: selectedProduct.productName,
+          quantity: numericQuantity,
+          reasonCode: selectedReason.code
         });
       });
 
@@ -351,7 +354,7 @@ function BreakScreen() {
           <Button
             mode="contained"
             onPress={handleSave}
-            disabled={loading || !selectedMotive || !selectedProduct || !quantity.value}
+            disabled={loading || !selectedMotive || !selectedProduct || !quantity}
             style={styles.saveButton}
           >
             Salvar

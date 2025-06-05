@@ -1,7 +1,7 @@
 // src/services/EntryService.js
 import { database } from '../database';
-import Entry from '../database/model/Entry.js';
-import Product from '../database/model/Product.js';
+import Entry from '../database/model/Entry';
+import Product from '../database/model/Product';
 import Reason from '../database/model/Reason.js';
 
 export class EntryService {

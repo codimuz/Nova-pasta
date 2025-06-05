@@ -77,22 +77,22 @@ class ProductService {
         )
         .fetch();
       
-      // Mapear para formato esperado
+      // Mapear para formato esperado usando os nomes corretos dos campos do schema
       const mappedProducts = products.map(product => ({
         id: product.id,
-        productCode: product.productCode,
-        productName: product.productName,
-        regularPrice: product.regularPrice,
-        clubPrice: product.clubPrice,
-        unitType: product.unitType,
-        createdAt: product.createdAt,
-        updatedAt: product.updatedAt,
+        productCode: product.product_code,
+        productName: product.product_name,
+        regularPrice: product.regular_price,
+        clubPrice: product.club_price,
+        unitType: product.unit_type,
+        createdAt: product.created_at,
+        updatedAt: product.updated_at,
         // Campos legacy para compatibilidade
-        product_code: product.productCode,
-        product_name: product.productName,
-        regular_price: product.regularPrice,
-        club_price: product.clubPrice,
-        unit_type: product.unitType,
+        product_code: product.product_code,
+        product_name: product.product_name,
+        regular_price: product.regular_price,
+        club_price: product.club_price,
+        unit_type: product.unit_type,
       }));
       
       // Salvar no cache
@@ -145,29 +145,29 @@ class ProductService {
         .query(
           Q.where('deleted_at', null), // Apenas produtos não excluídos
           Q.or(
-            Q.where('product_name', Q.like(`%${trimmedTerm}%`)),
-            Q.where('product_code', Q.like(`%${trimmedTerm}%`))
+            Q.where('product_name', Q.like(`%${Q.sanitizeLikeString(trimmedTerm)}%`)),
+            Q.where('product_code', Q.like(`%${Q.sanitizeLikeString(trimmedTerm)}%`))
           ),
           Q.take(maxResults) // Limitar resultados na query
         )
         .fetch();
       
-      // Mapear resultados
+      // Mapear resultados usando os nomes corretos dos campos do schema
       const mappedResults = products.map(product => ({
         id: product.id,
-        productCode: product.productCode,
-        productName: product.productName,
-        regularPrice: product.regularPrice,
-        clubPrice: product.clubPrice,
-        unitType: product.unitType,
-        createdAt: product.createdAt,
-        updatedAt: product.updatedAt,
+        productCode: product.product_code,
+        productName: product.product_name,
+        regularPrice: product.regular_price,
+        clubPrice: product.club_price,
+        unitType: product.unit_type,
+        createdAt: product.created_at,
+        updatedAt: product.updated_at,
         // Campos legacy para compatibilidade
-        product_code: product.productCode,
-        product_name: product.productName,
-        regular_price: product.regularPrice,
-        club_price: product.clubPrice,
-        unit_type: product.unitType,
+        product_code: product.product_code,
+        product_name: product.product_name,
+        regular_price: product.regular_price,
+        club_price: product.club_price,
+        unit_type: product.unit_type,
       }));
       
       // Salvar no cache
@@ -262,19 +262,19 @@ class ProductService {
       const product = products[0];
       const mappedProduct = {
         id: product.id,
-        productCode: product.productCode,
-        productName: product.productName,
-        regularPrice: product.regularPrice,
-        clubPrice: product.clubPrice,
-        unitType: product.unitType,
-        createdAt: product.createdAt,
-        updatedAt: product.updatedAt,
+        productCode: product.product_code,
+        productName: product.product_name,
+        regularPrice: product.regular_price,
+        clubPrice: product.club_price,
+        unitType: product.unit_type,
+        createdAt: product.created_at,
+        updatedAt: product.updated_at,
         // Campos legacy para compatibilidade
-        product_code: product.productCode,
-        product_name: product.productName,
-        regular_price: product.regularPrice,
-        club_price: product.clubPrice,
-        unit_type: product.unitType,
+        product_code: product.product_code,
+        product_name: product.product_name,
+        regular_price: product.regular_price,
+        club_price: product.club_price,
+        unit_type: product.unit_type,
       };
       
       // Salvar no cache
@@ -307,11 +307,11 @@ class ProductService {
   
           return await productsCollection.create(product => {
             const rawCode = productData.product_code || productData.productCode;
-            product.productCode = this.formatProductCode(rawCode);
-            product.productName = productName;
-            product.regularPrice = productData.regular_price || productData.regularPrice || 0;
-            product.clubPrice = productData.club_price || productData.clubPrice || 0;
-            product.unitType = productData.unit_type || productData.unitType || determinedUnitType;
+            product.product_code = this.formatProductCode(rawCode);
+            product.product_name = productName;
+            product.regular_price = productData.regular_price || productData.regularPrice || 0;
+            product.club_price = productData.club_price || productData.clubPrice || 0;
+            product.unit_type = productData.unit_type || productData.unitType || determinedUnitType;
         });
       });
 
@@ -354,20 +354,20 @@ class ProductService {
           await productRecord.update(product => {
             if (updates.product_name || updates.productName) {
               const newProductName = updates.product_name || updates.productName;
-              product.productName = newProductName;
+              product.product_name = newProductName;
               // Atualiza o unit_type baseado no novo nome se não foi explicitamente fornecido
               if (!updates.unit_type && !updates.unitType) {
-                product.unitType = this.determineUnitType(newProductName);
+                product.unit_type = this.determineUnitType(newProductName);
               }
             }
           if (updates.regular_price !== undefined || updates.regularPrice !== undefined) {
-            product.regularPrice = updates.regular_price || updates.regularPrice;
+            product.regular_price = updates.regular_price || updates.regularPrice;
           }
           if (updates.club_price !== undefined || updates.clubPrice !== undefined) {
-            product.clubPrice = updates.club_price || updates.clubPrice;
+            product.club_price = updates.club_price || updates.clubPrice;
           }
           if (updates.unit_type || updates.unitType) {
-            product.unitType = updates.unit_type || updates.unitType;
+            product.unit_type = updates.unit_type || updates.unitType;
           }
         });
       });
@@ -407,7 +407,7 @@ class ProductService {
         const productRecord = await productsCollection.find(product.id);
         
         await productRecord.update(product => {
-          product.deletedAt = new Date();
+          product.deleted_at = Date.now();
         });
       });
 
