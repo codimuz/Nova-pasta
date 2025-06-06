@@ -3,8 +3,6 @@
     "name": "invent",
     "slug": "invent",
     "version": "v1.0.5",
-    "plugins": [
-      "expo-sqlite"
-    ]
+    "plugins": []
   }
 }
